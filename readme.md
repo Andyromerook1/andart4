@@ -58,7 +58,7 @@ pkg update && pkg upgrade -y
 pkg install python git cloudflared -y
 
 # 3. Instalar librerías de Python
-pip install requests beautifulsoup4
+pip install requests beautifulsoup4 flask
 
 # 4. Clonar el repositorio
 git clone https://github.com/Andyromerook1/andart4.git
