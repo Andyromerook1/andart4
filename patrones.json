@@ -4,5 +4,25 @@
   "Correo Electrónico": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
   "Contraseña en código": "(password|passwd|contraseña)\\s*[=:]\\s*.+",
   "Clave API": "(api_key|apikey|token)\\s*[=:]\\s*[A-Za-z0-9-_]{20,}",
-  "Billetera Bitcoin": "(^|[^a-km-zA-HJ-NP-Z1-9])([13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-z0-9]{39,59})"
+  "Billetera Bitcoin": "(^|[^a-km-zA-HJ-NP-Z1-9])([13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-z0-9]{39,59})",
+
+  "Clave Secreta AWS": "(?i)aws(.{0,20})?(?-i)['\\\"][A-Za-z0-9/+=]{40}['\\\"]",
+  "Token GitHub": "gh[pors]_[A-Za-z0-9]{36}",
+  "Token Personal GitHub": "ghp_[A-Za-z0-9]{36}",
+  "Token OAuth GitHub": "gho_[A-Za-z0-9]{36}",
+  "Token GitHub (Antiguo)": "[gG][iI][tT][hH][uU][bB].*['\\\"]?[a-zA-Z0-9]{35,40}['\\\"]?",
+  "Clave API Google": "AIza[A-Za-z0-9_-]{35}",
+  "Token Google Cloud": "ya29\\.[A-Za-z0-9_-]{40,100}",
+  "Clave Stripe": "(sk_live|pk_live)_[A-Za-z0-9]{24,32}",
+  "Clave SendGrid": "SG\\.[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}",
+  "Clave Discord": "MTA[a-zA-Z0-9_-]{18,60}",
+  "Token Discord Bot": "([MN][A-Za-z0-9]{23})\\.([A-Za-z0-9_-]{6})\\.([A-Za-z0-9_-]{27,38})",
+  "Clave Slack": "xox[baprs]-[A-Za-z0-9-]{10,48}",
+  "Token Firebase": "AIza[A-Za-z0-9_\\\\-]{35}",
+  "Clave SSH privada": "-----BEGIN (RSA|OPENSSH|DSA|EC) PRIVATE KEY-----",
+  "Cadena Base64 (Posible Secreto)": "[A-Za-z0-9+/]{32,}={0,2}",
+  "Número Tarjeta (Visa)": "4[0-9]{12}(?:[0-9]{3})?",
+  "Número Tarjeta (Mastercard)": "5[1-5][0-9]{14}",
+  "Clave Secreta JWT": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
+  "Cadena tipo Contraseña": "(pass|pwd|secret|private|credential)\\s*[=:]\\s*['\\\"]?[A-Za-z0-9!@#$%^&*_+-]{8,}['\\\"]?"
 }
