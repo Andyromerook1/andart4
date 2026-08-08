@@ -1,0 +1,8 @@
+{
+  "Clave AWS": "AKIA[A-Z0-9]{16}",
+  "Token Telegram": "\\d{8,10}:[A-Za-z0-9_-]{35}",
+  "Correo Electrónico": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+  "Contraseña en código": "(password|passwd|contraseña)\\s*[=:]\\s*.+",
+  "Clave API": "(api_key|apikey|token)\\s*[=:]\\s*[A-Za-z0-9-_]{20,}",
+  "Billetera Bitcoin": "(^|[^a-km-zA-HJ-NP-Z1-9])([13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-z0-9]{39,59})"
+}
