@@ -28,13 +28,15 @@ class FuentesAutomaticas:
         urls = []
         try:
             print("🔗 Consultando semillas automáticas de Wikipedia...")
-            url_api = "https://es.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=10&format=json"
+            url_api = "https://es.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit={cantidad}&format=json"
             resp = requests.get(url_api, timeout=10, headers={"User-Agent": "MiBot/1.0"})
             if resp.status_code == 200:
                 datos = resp.json()
                 for item in datos.get("query", {}).get("random", []):
                     titulo = item["title"].replace(" ", "_")
                     urls.append(f"https://es.wikipedia.org/wiki/{titulo}")
+                    if len(urls) >= cantidad:
+                        break
             print(f"   ✅ Obtenidas {len(urls)} URLs desde Wikipedia")
         except Exception as e:
             print(f"   ⚠️ Error Wikipedia: {type(e).__name__}")
@@ -50,8 +52,12 @@ class FuentesAutomaticas:
             print(f"   ℹ️ {nombre} no existe, se omite")
             return []
 
-    def generar_rango_ip(self, cantidad=50):
-        a = random.randint(1, 223)
+    def generar_rango_ip(self, cantidad=254):
+        # Evita rangos reservados/privados para mayor variedad
+        while True:
+            a = random.randint(1, 223)
+            if a not in [10, 172, 192]:  # Evita IPs privadas comunes
+                break
         b = random.randint(0, 255)
         c = random.randint(0, 255)
         base = f"{a}.{b}.{c}"
