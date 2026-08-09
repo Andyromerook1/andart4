@@ -18,7 +18,7 @@ def menu():
 def ejecutar_escaneo_masivo(fuentes, total_objetivos=1000, puertos=None):
     """Genera subredes completas y escanea hasta cubrir la cantidad solicitada."""
     if puertos is None:
-        # Lista completa de puertos más usados (agregados todos los comunes)
+        # Lista completa de puertos más usados
         puertos = [
             21, 22, 23, 25, 53, 67, 68, 69, 80, 81, 110, 111, 135, 139,
             143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 636,
@@ -32,14 +32,15 @@ def ejecutar_escaneo_masivo(fuentes, total_objetivos=1000, puertos=None):
     print(f"   {len(puertos)} Puertos por IP\n")
 
     while ips_procesadas < total_objetivos:
-        # Genera una subred nueva completa (ej: "185.220.101")
+        # Genera una subred nueva completa
         base = fuentes.generar_rango_ip()
+        if not base:
+            print("⚠️ No se pudo generar rango de IPs.")
+            break
 
-        # Cuántas IPs faltan para llegar al objetivo (máx 254 por subred)
         restantes = total_objetivos - ips_procesadas
         bloque = min(254, restantes)
 
-        # Escanea .1 hasta .bloque de esa subred
         escaner = EscanerRed(rango_ip=(base, 1, bloque), puertos=puertos)
         escaner.iniciar()
 
@@ -57,24 +58,31 @@ if __name__ == "__main__":
         if opcion == "1":
             semillas = fuentes.obtener_todas()
             if not semillas:
-                print("⚠️ No se obtuvieron URLs.")
+                print("⚠️ No se obtuvieron URLs desde las fuentes.")
                 continue
-            limite = int(input("Cantidad máxima de páginas a visitar [ej: 9999]: "))
+            entrada = input("Cantidad máxima de páginas a visitar [Enter = ilimitado]: ").strip()
+            limite = int(entrada) if entrada else 10**6
             bot = Rastreador(semilla=semillas, limite=limite)
             bot.iniciar()
 
         # === OPCIÓN 2: ESCANEO MASIVO DE RED ===
         elif opcion == "2":
-            limite_ips = int(input("Cantidad total de IPs a escanear [ej: 1000 o 9999]: "))
-            confirmar = input(f"¿Iniciar escaneo de {limite_ips} IPs? (s/n): ").strip().lower()
+            entrada = input("Cantidad total de IPs a escanear [Enter = 1000]: ").strip()
+            limite_ips = int(entrada) if entrada else 1000
+            confirmar = input(f"¿Iniciar escaneo de ~{limite_ips} IPs? (s/n): ").strip().lower()
             if confirmar == "s":
                 ejecutar_escaneo_masivo(fuentes, total_objetivos=limite_ips)
 
         # === OPCIÓN 3: TODO JUNTO ===
         elif opcion == "3":
             semillas = fuentes.obtener_todas()
-            limite_web = int(input("Páginas web a rastrear [ej: 9999]: "))
-            limite_ips = int(input("Cantidad de IPs a escanear [ej: 1000]: "))
+            if not semillas:
+                print("⚠️ No se obtuvieron URLs desde las fuentes.")
+                continue
+            entrada_web = input("Páginas web a rastrear [Enter = ilimitado]: ").strip()
+            limite_web = int(entrada_web) if entrada_web else 10**6
+            entrada_ips = input("Cantidad de IPs a escanear [Enter = 1000]: ").strip()
+            limite_ips = int(entrada_ips) if entrada_ips else 1000
 
             print("\n--- INICIANDO RASTREO WEB ---")
             bot = Rastreador(semilla=semillas, limite=limite_web)
@@ -87,4 +95,7 @@ if __name__ == "__main__":
             print("\n👋 ¡Finalizado!")
             break
 
-        input("\nEnter para volver al menú...")
+        else:
+            print("❌ Opción no válida.")
+
+        input("\nPresioná Enter para volver al menú...")
