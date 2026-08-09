@@ -10,25 +10,63 @@ class Rastreador:
         self.limite = limite
         self.filtro = MotorFiltro()
         self.headers = {"User-Agent": "MiBot/1.0"}
+        # Archivos típicos donde se suelen filtrar claves por mala configuración
+        self.rutas_sensibles = ["/.env", "/config.json", "/robots.txt", "/sitemap.xml", "/manifest.json"]
 
     def es_mismo_dominio(self, base, url):
         return urlparse(base).netloc in urlparse(urljoin(base, url)).netloc
 
-    def extraer_enlaces(self, url, html):
+    def extraer_enlaces(self, url, html_o_texto):
         enlaces = []
-        soup = BeautifulSoup(html, "html.parser")
-        for a in soup.find_all("a", href=True):
-            absoluto = urljoin(url, a["href"])
-            if absoluto.startswith("http") and self.es_mismo_dominio(url, absoluto):
-                enlaces.append(absoluto.split("#")[0].rstrip("/"))
+        try:
+            soup = BeautifulSoup(html_o_texto, "html.parser")
+
+            # 1. Enlaces estándar (<a href="...">)
+            for a in soup.find_all("a", href=True):
+                absoluto = urljoin(url, a["href"])
+                if absoluto.startswith("http") and self.es_mismo_dominio(url, absoluto):
+                    enlaces.append(absoluto.split("#")[0].rstrip("/"))
+
+            # 2. Archivos JavaScript (<script src="...">)
+            for script in soup.find_all("script", src=True):
+                absoluto_js = urljoin(url, script["src"])
+                if absoluto_js.startswith("http") and self.es_mismo_dominio(url, absoluto_js):
+                    enlaces.append(absoluto_js)
+
+            # 3. Recursos enlazados como CSS, manifiestos o JSON (<link href="...">)
+            for link in soup.find_all("link", href=True):
+                absoluto_link = urljoin(url, link["href"])
+                if absoluto_link.startswith("http") and self.es_mismo_dominio(url, absoluto_link):
+                    enlaces.append(absoluto_link)
+
+        except Exception:
+            # Si el contenido leído no es HTML (por ejemplo, es un JS o un JSON puro), pasa de largo
+            pass
+
         return enlaces
+
+    def agregar_rutas_sensibles(self, url_base):
+        """Genera pruebas automáticas para archivos de configuración expuestos."""
+        parsed = urlparse(url_base)
+        dominio_base = f"{parsed.scheme}://{parsed.netloc}"
+        
+        for ruta in self.rutas_sensibles:
+            url_sensible = dominio_base + ruta
+            if url_sensible not in self.visitados and url_sensible not in self.cola:
+                self.cola.append(url_sensible)
 
     def iniciar(self):
         print(f"🔄 INICIANDO RASTREO — {len(self.cola)} semillas cargadas\n")
+        
+        # Agregamos automáticamente las rutas sensibles de las semillas iniciales
+        for semilla in list(self.cola):
+            self.agregar_rutas_sensibles(semilla)
+
         while self.cola and len(self.visitados) < self.limite:
             url = self.cola.pop(0)
             if url in self.visitados:
                 continue
+                
             print(f"🔍 [{len(self.visitados)+1}/{self.limite}] Leyendo: {url[:80]}")
             try:
                 resp = requests.get(url, timeout=10, headers=self.headers)
@@ -36,10 +74,12 @@ class Rastreador:
                     continue
                 self.visitados.add(url)
 
+                # Escanear el contenido completo del archivo (sea HTML, JS, JSON, CSS, etc.)
                 hallazgos = self.filtro.escanear_texto(resp.text, origen=url)
                 for h in hallazgos:
                     self.filtro.guardar_hallazgo(h)
 
+                # Descubrir nuevos enlaces y archivos dentro del contenido
                 nuevos = self.extraer_enlaces(url, resp.text)
                 for enlace in nuevos:
                     if enlace not in self.visitados and enlace not in self.cola:
@@ -50,5 +90,5 @@ class Rastreador:
                 continue
 
         print(f"\n✅ RASTREO FINALIZADO")
-        print(f"   Páginas visitadas: {len(self.visitados)}")
+        print(f"   Páginas y archivos visitados: {len(self.visitados)}")
         print(f"   Hallazgos guardados en: hallazgos.txt")
