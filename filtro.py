@@ -18,14 +18,14 @@ class MotorFiltro:
 
         self.patrones = {}
         for nombre, regex in datos.items():
-            # Aplicar IGNORECASE solo a los patrones genéricos
+            # Aplicar re.IGNORECASE solo a los patrones que corresponda
             banderas = re.IGNORECASE if any(ignorado in nombre for ignorado in self.IGNORE_CASE) else 0
             self.patrones[nombre] = re.compile(regex, banderas)
 
     def escanear_texto(self, texto, origen="desconocido"):
         hallazgos = []
         for nombre, regex in self.patrones.items():
-            # Usar finditer asegura capturar el texto completo sin importar los grupos ()
+            # Encontrar todas las coincidencias
             for match in regex.finditer(texto):
                 valor = match.group(0).strip()
                 if valor:
@@ -40,4 +40,5 @@ class MotorFiltro:
         linea = f"[{hallazgo['tipo']}] {hallazgo['valor']} → {hallazgo['origen']}\n"
         with open("hallazgos.txt", "a", encoding="utf-8") as f:
             f.write(linea)
+        # Mostrar en consola (truncado si es muy largo)
         print(f"⚠️  HALLAZGO: {hallazgo['tipo']} → {hallazgo['valor'][:50]}...")
