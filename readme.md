@@ -55,7 +55,7 @@ Abrí Termux y ejecutá paso a paso:
 pkg update && pkg upgrade -y
 
 # 2. Instalar dependencias
-pkg install python git cloudflared -y
+pkg install python3 git cloudflared -y
 
 # 3. Instalar librerías de Python
 pip install requests beautifulsoup4 flask
