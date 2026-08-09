@@ -21,21 +21,20 @@ class EscanerRed:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(0.8)
         try:
-            if sock.connect_ex((ip, puerto)) == 0:
-                return True
+            resultado = sock.connect_ex((ip, puerto))
+            return resultado == 0  # ✅ Solo devuelve True si está ABIERTO
         except Exception:
-            pass
+            return False  # ✅ Silencia errores de conexión = MENOS RUIDO
         finally:
             sock.close()
-        return False
 
     def _evaluar_objetivo(self, args):
         ip, puerto = args
         if self.probar_conexion(ip, puerto):
             registro = f"{ip}:{puerto} — ABIERTO"
-            print(f"   ✅ {registro}")
+            print(f"   ✅ {registro}")  # ✅ SOLO muestra lo que está ABIERTO
             return registro
-        return None
+        return None  # ✅ Los cerrados NO aparecen en pantalla = SIN RUIDO
 
     def iniciar(self):
         print(f"🌐 ESCANEANDO: {self.base_ip}.{self.inicio} → {self.base_ip}.{self.fin}")
@@ -58,11 +57,11 @@ class EscanerRed:
             futuros = [executor.submit(self._evaluar_objetivo, t) for t in tareas]
             for fut in as_completed(futuros):
                 try:
-                    res = fut.result()
+                    res = fut.result(timeout=2)  # ✅ Evita que se quede colgado
                     if res:
                         resultados.append(res)
                 except Exception:
-                    continue
+                    continue  # ✅ Ignora errores de hilos = SIN RUIDO
 
         self.activos = resultados
 
