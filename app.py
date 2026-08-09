@@ -1,4 +1,4 @@
-from fuentes import FuentesAutomaticas
+from fuentes import FuentesSemillas
 from rastreador import Rastreador
 from escaner_red import EscanerRed
 
@@ -49,7 +49,7 @@ def ejecutar_escaneo_masivo(fuentes, total_objetivos=1000, puertos=None):
 
 
 if __name__ == "__main__":
-    fuentes = FuentesAutomaticas()
+    fuentes = FuentesSemillas()
 
     while True:
         opcion = menu()
