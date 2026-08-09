@@ -4,7 +4,8 @@ from bs4 import BeautifulSoup
 from filtro import MotorFiltro
 
 class Rastreador:
-    def __init__(self, semilla, limite=20):
+    def __init__(self, semilla, limite=1000000):
+        # ⚠️ limite=1000000 → prácticamente SIN LÍMITE de páginas
         self.cola = list(set(semilla))
         self.visitados = set()
         self.limite = limite
@@ -13,9 +14,9 @@ class Rastreador:
         # Archivos típicos donde se suelen filtrar claves por mala configuración
         self.rutas_sensibles = ["/.env", "/config.json", "/robots.txt", "/sitemap.xml", "/manifest.json"]
 
-    # ✅ LÍMITE DE DOMINIO DESACTIVADO → ahora devuelve SIEMPRE VERDADERO
+    # ✅ LÍMITE DE DOMINIO DESACTIVADO → acepta TODOS los enlaces, cualquier sitio
     def es_mismo_dominio(self, base, url):
-        return True  # ✅ Acepta TODOS los enlaces, salta a cualquier sitio
+        return True
 
     def extraer_enlaces(self, url, html_o_texto):
         enlaces = []
@@ -41,7 +42,7 @@ class Rastreador:
                     enlaces.append(absoluto_link)
 
         except Exception:
-            # Si el contenido leído no es HTML (por ejemplo, es un JS o un JSON puro), pasa de largo
+            # Si el contenido no es HTML (JS, JSON, etc.), continúa sin fallar
             pass
 
         return enlaces
@@ -58,9 +59,10 @@ class Rastreador:
 
     def iniciar(self):
         print(f"🔄 INICIANDO RASTREO — {len(self.cola)} semillas cargadas")
-        print(f"   🌐 Límite de dominio: DESACTIVADO → recorrerá cualquier sitio\n")
+        print(f"   🌐 Restricción de dominio: DESACTIVADO → cualquier sitio")
+        print(f"   📄 Límite de páginas: {self.limite} (prácticamente ilimitado)\n")
         
-        # Agregamos automáticamente las rutas sensibles de las semillas iniciales
+        # Agrega rutas sensibles automáticamente a cada semilla
         for semilla in list(self.cola):
             self.agregar_rutas_sensibles(semilla)
 
@@ -76,12 +78,12 @@ class Rastreador:
                     continue
                 self.visitados.add(url)
 
-                # Escanear el contenido completo del archivo (sea HTML, JS, JSON, CSS, etc.)
+                # Escanea TODO el contenido: HTML, JS, JSON, CSS, lo que sea
                 hallazgos = self.filtro.escanear_texto(resp.text, origen=url)
                 for h in hallazgos:
                     self.filtro.guardar_hallazgo(h)
 
-                # Descubrir nuevos enlaces y archivos dentro del contenido
+                # Descubre nuevos enlaces dentro de la página
                 nuevos = self.extraer_enlaces(url, resp.text)
                 for enlace in nuevos:
                     if enlace not in self.visitados and enlace not in self.cola:
