@@ -13,8 +13,9 @@ class Rastreador:
         # Archivos típicos donde se suelen filtrar claves por mala configuración
         self.rutas_sensibles = ["/.env", "/config.json", "/robots.txt", "/sitemap.xml", "/manifest.json"]
 
+    # ✅ LÍMITE DE DOMINIO DESACTIVADO → ahora devuelve SIEMPRE VERDADERO
     def es_mismo_dominio(self, base, url):
-        return urlparse(base).netloc in urlparse(urljoin(base, url)).netloc
+        return True  # ✅ Acepta TODOS los enlaces, salta a cualquier sitio
 
     def extraer_enlaces(self, url, html_o_texto):
         enlaces = []
@@ -56,7 +57,8 @@ class Rastreador:
                 self.cola.append(url_sensible)
 
     def iniciar(self):
-        print(f"🔄 INICIANDO RASTREO — {len(self.cola)} semillas cargadas\n")
+        print(f"🔄 INICIANDO RASTREO — {len(self.cola)} semillas cargadas")
+        print(f"   🌐 Límite de dominio: DESACTIVADO → recorrerá cualquier sitio\n")
         
         # Agregamos automáticamente las rutas sensibles de las semillas iniciales
         for semilla in list(self.cola):
