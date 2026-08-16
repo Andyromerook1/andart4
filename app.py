@@ -1,6 +1,7 @@
 from fuentes import FuentesSemillas
 from rastreador import Rastreador
 from escaner_red import EscanerRed
+import config  # Para usar los puertos por defecto
 
 def menu():
     print("="*60)
@@ -18,14 +19,7 @@ def menu():
 def ejecutar_escaneo_masivo(fuentes, total_objetivos=1000, puertos=None):
     """Genera subredes completas y escanea hasta cubrir la cantidad solicitada."""
     if puertos is None:
-        # Lista completa de puertos más usados
-        puertos = [
-            21, 22, 23, 25, 53, 67, 68, 69, 80, 81, 110, 111, 135, 139,
-            143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 636,
-            993, 995, 1080, 1433, 1434, 1521, 1723, 2049, 2121, 3306,
-            3389, 5060, 5432, 5900, 5901, 6379, 8000, 8080, 8443,
-            8888, 9000, 9200, 9300, 11211, 27017
-        ]
+        puertos = config.COMMON_PORTS  # Usamos la lista definida en config
 
     ips_procesadas = 0
     print(f"\n🌐 INICIANDO ESCANEO MASIVO DE RED — Objetivo: ~{total_objetivos} IPs")
@@ -61,14 +55,19 @@ if __name__ == "__main__":
                 print("⚠️ No se obtuvieron URLs desde las fuentes.")
                 continue
             entrada = input("Cantidad máxima de páginas a visitar [Enter = ilimitado]: ").strip()
-            limite = int(entrada) if entrada else 10**6
-            bot = Rastreador(semilla=semillas, limite=limite)
+            limite = int(entrada) if entrada else config.DEFAULT_PAGE_LIMIT
+            
+            # Preguntar si usar Tor (sobrescribe config.USE_TOR)
+            tor_input = input("¿Usar Tor para ocultar IP? (s/n) [Enter = no]: ").strip().lower()
+            use_tor = True if tor_input == "s" else False
+
+            bot = Rastreador(semilla=semillas, limite=limite, use_tor=use_tor)
             bot.iniciar()
 
         # === OPCIÓN 2: ESCANEO MASIVO DE RED ===
         elif opcion == "2":
-            entrada = input("Cantidad total de IPs a escanear [Enter = 1000]: ").strip()
-            limite_ips = int(entrada) if entrada else 1000
+            entrada = input(f"Cantidad total de IPs a escanear [Enter = {config.DEFAULT_IP_LIMIT}]: ").strip()
+            limite_ips = int(entrada) if entrada else config.DEFAULT_IP_LIMIT
             confirmar = input(f"¿Iniciar escaneo de ~{limite_ips} IPs? (s/n): ").strip().lower()
             if confirmar == "s":
                 ejecutar_escaneo_masivo(fuentes, total_objetivos=limite_ips)
@@ -80,12 +79,16 @@ if __name__ == "__main__":
                 print("⚠️ No se obtuvieron URLs desde las fuentes.")
                 continue
             entrada_web = input("Páginas web a rastrear [Enter = ilimitado]: ").strip()
-            limite_web = int(entrada_web) if entrada_web else 10**6
-            entrada_ips = input("Cantidad de IPs a escanear [Enter = 1000]: ").strip()
-            limite_ips = int(entrada_ips) if entrada_ips else 1000
+            limite_web = int(entrada_web) if entrada_web else config.DEFAULT_PAGE_LIMIT
+            entrada_ips = input(f"Cantidad de IPs a escanear [Enter = {config.DEFAULT_IP_LIMIT}]: ").strip()
+            limite_ips = int(entrada_ips) if entrada_ips else config.DEFAULT_IP_LIMIT
+
+            # Preguntar por Tor para el rastreo web
+            tor_input = input("¿Usar Tor para el rastreo web? (s/n) [Enter = no]: ").strip().lower()
+            use_tor = True if tor_input == "s" else False
 
             print("\n--- INICIANDO RASTREO WEB ---")
-            bot = Rastreador(semilla=semillas, limite=limite_web)
+            bot = Rastreador(semilla=semillas, limite=limite_web, use_tor=use_tor)
             bot.iniciar()
 
             print("\n--- INICIANDO ESCANEO DE RED ---")
