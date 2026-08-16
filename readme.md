@@ -1,20 +1,20 @@
-# 🛡️ ANDY TECHNOLOGY SYSTEMS
+**ANDY TECHNOLOGY SYSTEMS**
 
-## 🤖 BOT RASTREADOR AUTÓNOMO
+🤖 **BOT RASTREADOR AUTÓNOMO — ANDART v4**
 
-### 🔍 Reconocimiento Automático desde Fuentes Públicas + Panel en Vivo
-
----
-
-## ⚠️ AVISO LEGAL Y DESLINDE DE RESPONSABILIDAD
-
-* 🎯 **FINES EXCLUSIVAMENTE EDUCATIVOS:** Esta herramienta ha sido desarrollada únicamente para demostrar cómo funcionan los sistemas de rastreo automatizado utilizados en reconocimiento de fuentes públicas.
-* ⚖️ **USO RESPONSABLE:** El escaneo de redes, rangos IP o propiedades ajenas sin autorización escrita expresa constituye un delito informático. Esta herramienta no debe ser utilizada contra objetivos que no sean de tu propiedad o sobre los que no cuentes con permiso formal.
-* 📜 **LIMITACIÓN DE DISEÑO:** El módulo de rastreo web consulta únicamente APIs públicas y contenido accesible por cualquier navegador sin autenticación. No realiza ataques, inyecciones ni intentos de explotar vulnerabilidades.
+🔍 **Reconocimiento Automático desde Fuentes Públicas + Evasión WAF + Panel en Vivo**
 
 ---
 
-## ✅ ¿CÓMO FUNCIONA?
+⚠️ **AVISO LEGAL Y DESLINDE DE RESPONSABILIDAD**
+
+🎯 **FINES EXCLUSIVAMENTE EDUCATIVOS:** Esta herramienta ha sido desarrollada únicamente para demostrar cómo funcionan los sistemas de rastreo automatizado utilizados en reconocimiento de fuentes públicas.
+⚖️ **USO RESPONSABLE:** El escaneo de redes, rangos IP o propiedades ajenas sin autorización escrita expresa constituye un delito informático. Esta herramienta no debe ser utilizada contra objetivos que no sean de tu propiedad o sobre los que no cuentes con permiso formal.
+📜 **LIMITACIÓN DE DISEÑO:** El módulo de rastreo web consulta únicamente APIs públicas y contenido accesible por cualquier navegador sin autenticación. No realiza ataques, inyecciones ni intentos de explotar vulnerabilidades.
+
+---
+
+✅ **¿CÓMO FUNCIONA?**
 
 El bot se alimenta solo al encenderse, sin que tengas que escribir ninguna dirección manualmente:
 
@@ -24,19 +24,19 @@ El bot se alimenta solo al encenderse, sin que tengas que escribir ninguna direc
 * 🌐 **Generador automático de rangos IP:** Crea direcciones al azar para el módulo de red.
 
 **Flujo completo:**
-
-> Descubre enlaces ➔ Lee páginas ➔ Filtra por patrones ➔ Guarda hallazgos en `hallazgos.txt` ➔ Se muestran en vivo en el panel web.
+Descubre enlaces ➔ Pasa por el cliente con evasión WAF/Tor ➔ Lee páginas ➔ Filtra por patrones ➔ Guarda hallazgos en `hallazgos.txt` ➔ Se muestran en vivo en el panel web.
 
 ---
 
-## 📁 ESTRUCTURA DEL PROYECTO
+📁 **ESTRUCTURA DEL PROYECTO**
 
-```plaintext
+```text
 andart4/
  ├─ app.py              ← Menú principal y coordinación
  ├─ servidor.py         ← Panel web en tiempo real ✅
+ ├─ network_client.py   ← Cliente de red con Evasión WAF + Tor ✅
  ├─ fuentes.py          ← Obtención automática de semillas desde APIs
- ├─ rastreador.py       ← Navegación automática y descubrimiento de enlaces
+ ├─ rastreador.py       ← Navegación automática usando network_client
  ├─ filtro.py           ← Búsqueda por patrones RegEx definidos
  ├─ escaner_red.py      ← Escaneo de rangos IP y detección de puertos abiertos
  ├─ patrones.json       ← Moldes de búsqueda (claves, tokens, correos...)
@@ -46,7 +46,7 @@ andart4/
 
 ---
 
-## 🚀 INSTALACIÓN EN TERMUX
+🚀 **INSTALACIÓN EN TERMUX**
 
 Abrí Termux y ejecutá paso a paso:
 
@@ -54,11 +54,11 @@ Abrí Termux y ejecutá paso a paso:
 # 1. Actualizar sistema
 pkg update && pkg upgrade -y
 
-# 2. Instalar dependencias
-pkg install python3 git cloudflared -y
+# 2. Instalar dependencias del sistema (incluye Tor y librerías C/FFI)
+pkg install python git cloudflared tor libffi openssl -y
 
 # 3. Instalar librerías de Python
-pip install requests beautifulsoup4 flask
+pip install requests beautifulsoup4 flask pysocks curl_cffi
 
 # 4. Clonar el repositorio
 git clone https://github.com/Andyromerook1/andart4.git
@@ -70,27 +70,30 @@ cd andart4
 
 ---
 
-## ▶️ EJECUCIÓN — INSTRUCCIONES COMPLETAS
+▶️ **EJECUCIÓN — INSTRUCCIONES COMPLETAS**
 
-### 🔹 Opción recomendada: 2 Terminales en Termux
+🔹 **Opción recomendada: 2 Terminales en Termux**
 
 Deslizá el dedo desde el borde izquierdo de la pantalla para abrir una segunda sesión y dejá las dos funcionando al mismo tiempo:
 
-#### 🟢 Terminal 1 — El bot trabaja y busca:
+🟢 **Terminal 1 — El bot trabaja y busca:**
+
+*(Opcional: Si querés activar la rotación de IP con Tor, ejecutá `tor &` antes de iniciar el bot)*
 
 ```bash
+tor &
 python app.py
 
 ```
 
 Se abrirá el menú. Elegí:
 
-* `1` ➔ Rastreo web (APIs automáticas + búsqueda de claves)
-* `2` ➔ Escaneo de red (genera rango IP automáticamente)
-* `3` ➔ AMBOS al mismo tiempo
-* `0` ➔ Salir
+* `1` ➔ **Rastreo web** (APIs automáticas + evasión WAF + búsqueda de claves)
+* `2` ➔ **Escaneo de red** (genera rango IP automáticamente)
+* `3` ➔ **AMBOS al mismo tiempo**
+* `0` ➔ **Salir**
 
-#### 🔵 Terminal 2 — Panel web en vivo desde cualquier dispositivo:
+🔵 **Terminal 2 — Panel web en vivo desde cualquier dispositivo:**
 
 ```bash
 python servidor.py &
@@ -98,15 +101,17 @@ cloudflared tunnel --url http://127.0.0.1:5000
 
 ```
 
-> ✅ Cloudflared imprimirá en pantalla un enlace público en color verde, por ejemplo: `[https://palabras-aleatorias.trycloudflare.com](https://palabras-aleatorias.trycloudflare.com)`
-> Entrá a ese enlace desde tu celular, PC o cualquier navegador del mundo. Verás los hallazgos apareciendo automáticamente cada 5 segundos sin que tengas que recargar la página.
+✅ **Cloudflared** imprimirá en pantalla un enlace público en color verde, por ejemplo: `[https://palabras-aleatorias.trycloudflare.com](https://palabras-aleatorias.trycloudflare.com)`
+Entrá a ese enlace desde tu celular, PC o cualquier navegador del mundo. Verás los hallazgos apareciendo automáticamente cada 5 segundos sin que tengas que recargar la página.
 
 ---
 
-## 🔄 ¿QUÉ OCURRE EN SEGUNDO PLANO?
+🔄 **¿QUÉ OCURRE EN SEGUNDO PLANO?**
 
-```plaintext
+```text
 [ENCENDER BOT]
+      ↓
+🌐 (Opcional) Activar demonio Tor en segundo plano (tor &)
       ↓
 🔗 Consultar GitHub API → trae repositorios nuevos automáticamente
       ↓
@@ -115,6 +120,8 @@ cloudflared tunnel --url http://127.0.0.1:5000
 📂 Cargar semillas.txt (si existe)
       ↓
 🌐 Generar rango IP aleatorio
+      ↓
+🛡️ Peticiones HTTP mediante network_client (Spoofing TLS + User-Agents + Jitter)
       ↓
 🔁 Llenar cola → navegar → descubrir enlaces → filtrar por patrones
       ↓
@@ -128,12 +135,14 @@ cloudflared tunnel --url http://127.0.0.1:5000
 
 ---
 
-## 📋 RESUMEN DE CARACTERÍSTICAS
+📋 **RESUMEN DE CARACTERÍSTICAS**
 
 | Característica | Detalle |
 | --- | --- |
 | **Semillas automáticas** | GitHub + Wikipedia + Archivo local |
 | **Sin escribir URLs** | El bot se alimenta solo al iniciar |
+| **Evasión WAF / TLS** | Rotación de User-Agents, headers realistas y `curl_cffi` |
+| **Soporte Tor** | Rotación de IP mediante proxy SOCKS5 (`127.0.0.1:9050`) |
 | **Búsqueda por patrones** | Claves AWS, tokens, correos, contraseñas, billeteras |
 | **Escaneo de red** | Genera rangos IP automáticamente |
 | **Panel en vivo** | Se actualiza cada 5 segundos |
@@ -142,9 +151,10 @@ cloudflared tunnel --url http://127.0.0.1:5000
 
 ---
 
-## ⚠️ NOTAS IMPORTANTES
+⚠️ **NOTAS IMPORTANTES**
 
 * El archivo `hallazgos.txt` se crea automáticamente al primer hallazgo. No necesitas crearlo.
+* El módulo de evasión `network_client.py` gestiona reintentos automáticos (*backoff exponencial*) ante respuestas `429` (Too Many Requests) o `403` (Forbidden).
 * El escaneo de red prueba puertos comunes (`22`, `80`, `443`, `3306`, `5432`, `27017`).
 * Si usás la opción `2` o `3`, el rango IP se genera aleatoriamente en cada ejecución.
 * El enlace de Cloudflared cambia cada vez que reiniciás el túnel.
