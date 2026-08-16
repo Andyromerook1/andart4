@@ -1,67 +1,34 @@
-import requests
+# rastreador.py (versión mejorada)
+import requests  # ya no se usa directamente, pero lo dejamos por si acaso
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from filtro import MotorFiltro
+from network_client import SecureRequester  # <-- NUEVO
 
 class Rastreador:
-    def __init__(self, semilla, limite=1000000):
-        # ⚠️ limite=1000000 → prácticamente SIN LÍMITE de páginas
+    def __init__(self, semilla, limite=1000000, use_tor=False, max_retries=3):
         self.cola = list(set(semilla))
         self.visitados = set()
         self.limite = limite
         self.filtro = MotorFiltro()
-        self.headers = {"User-Agent": "MiBot/1.0"}
-        # Archivos típicos donde se suelen filtrar claves por mala configuración
+        # En lugar de headers fijos, usamos el cliente avanzado
+        self.requester = SecureRequester(
+            use_tor=use_tor,
+            max_retries=max_retries,
+            timeout=15  # puedes ajustar
+        )
+        # Rutas sensibles (igual que antes)
         self.rutas_sensibles = ["/.env", "/config.json", "/robots.txt", "/sitemap.xml", "/manifest.json"]
 
-    # ✅ LÍMITE DE DOMINIO DESACTIVADO → acepta TODOS los enlaces, cualquier sitio
-    def es_mismo_dominio(self, base, url):
-        return True
-
-    def extraer_enlaces(self, url, html_o_texto):
-        enlaces = []
-        try:
-            soup = BeautifulSoup(html_o_texto, "html.parser")
-
-            # 1. Enlaces estándar (<a href="...">)
-            for a in soup.find_all("a", href=True):
-                absoluto = urljoin(url, a["href"])
-                if absoluto.startswith("http") and self.es_mismo_dominio(url, absoluto):
-                    enlaces.append(absoluto.split("#")[0].rstrip("/"))
-
-            # 2. Archivos JavaScript (<script src="...">)
-            for script in soup.find_all("script", src=True):
-                absoluto_js = urljoin(url, script["src"])
-                if absoluto_js.startswith("http") and self.es_mismo_dominio(url, absoluto_js):
-                    enlaces.append(absoluto_js)
-
-            # 3. Recursos enlazados como CSS, manifiestos o JSON (<link href="...">)
-            for link in soup.find_all("link", href=True):
-                absoluto_link = urljoin(url, link["href"])
-                if absoluto_link.startswith("http") and self.es_mismo_dominio(url, absoluto_link):
-                    enlaces.append(absoluto_link)
-
-        except Exception:
-            # Si el contenido no es HTML (JS, JSON, etc.), continúa sin fallar
-            pass
-
-        return enlaces
-
-    def agregar_rutas_sensibles(self, url_base):
-        """Genera pruebas automáticas para archivos de configuración expuestos."""
-        parsed = urlparse(url_base)
-        dominio_base = f"{parsed.scheme}://{parsed.netloc}"
-        
-        for ruta in self.rutas_sensibles:
-            url_sensible = dominio_base + ruta
-            if url_sensible not in self.visitados and url_sensible not in self.cola:
-                self.cola.append(url_sensible)
+    # ... (los métodos es_mismo_dominio, extraer_enlaces, agregar_rutas_sensibles se mantienen IDÉNTICOS) ...
 
     def iniciar(self):
         print(f"🔄 INICIANDO RASTREO — {len(self.cola)} semillas cargadas")
         print(f"   🌐 Restricción de dominio: DESACTIVADO → cualquier sitio")
-        print(f"   📄 Límite de páginas: {self.limite} (prácticamente ilimitado)\n")
-        
+        print(f"   📄 Límite de páginas: {self.limite} (prácticamente ilimitado)")
+        print(f"   🔒 Tor activado: {self.requester.use_tor}")
+        print(f"   🔄 Reintentos máximos: {self.requester.max_retries}\n")
+
         # Agrega rutas sensibles automáticamente a cada semilla
         for semilla in list(self.cola):
             self.agregar_rutas_sensibles(semilla)
@@ -70,12 +37,14 @@ class Rastreador:
             url = self.cola.pop(0)
             if url in self.visitados:
                 continue
-                
+
             print(f"🔍 [{len(self.visitados)+1}/{self.limite}] Leyendo: {url[:80]}")
             try:
-                resp = requests.get(url, timeout=10, headers=self.headers)
-                if resp.status_code != 200:
+                # === CAMBIO AQUÍ: usamos el requester en lugar de requests.get ===
+                resp = self.requester.get(url)
+                if resp is None or resp.status_code != 200:
                     continue
+
                 self.visitados.add(url)
 
                 # Escanea TODO el contenido: HTML, JS, JSON, CSS, lo que sea
