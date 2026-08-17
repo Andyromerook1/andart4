@@ -1,7 +1,9 @@
 import re
 import json
-import config  # Importamos la configuración
-from blockchain_client import BlockchainClient  # Nuestro nuevo módulo
+import config
+from blockchain_client import BlockchainClient
+from phishing_detector import PhishingDetector
+from js_analyzer import JSAnalyzer
 
 class MotorFiltro:
     # Patrones que NO distinguen mayúsculas/minúsculas
@@ -95,6 +97,20 @@ class MotorFiltro:
             except Exception as e:
                 print(f"⚠️ Error inicializando BlockchainClient: {e}")
 
+        # Inicializar detector de phishing y analizador JS
+        self.phishing_detector = None
+        self.js_analyzer = None
+        if config.ENABLE_PHISHING_DETECTION:
+            try:
+                self.phishing_detector = PhishingDetector()
+            except Exception as e:
+                print(f"⚠️ Error inicializando PhishingDetector: {e}")
+        if config.ENABLE_JS_ANALYSIS:
+            try:
+                self.js_analyzer = JSAnalyzer()
+            except Exception as e:
+                print(f"⚠️ Error inicializando JSAnalyzer: {e}")
+
     def _nivel_peligro(self, nombre):
         """Clasifica automáticamente sin romper nada"""
         if any(peligro in nombre for peligro in self.ALTO_RIESGO):
@@ -143,25 +159,21 @@ class MotorFiltro:
 
     def escanear_texto(self, texto, origen="desconocido"):
         hallazgos = []
-        ya_encontrado = set()  # ✅ Evita duplicados SIN cambiar tu lógica
+        ya_encontrado = set()
         ruido_descartado = 0
         
+        # --- 1. Escaneo de patrones generales (tu lógica original) ---
         for nombre, regex in self.patrones.items():
-            # ✅ Tu lógica INTACTA: encontrar todas las coincidencias
             for match in regex.finditer(texto):
                 valor = match.group(0).strip()
                 if not valor or len(valor) <= 5:
                     continue
 
-                # 🧠 APLICAMOS LOS FILTROS INTELIGENTES
                 es_valido = True
-
                 if "Tarjeta" in nombre:
-                    # Tarjetas → validar matemáticamente
                     if self.es_ruido_obvio(valor) or not self.validar_luhn(valor):
                         es_valido = False
                 else:
-                    # Lo demás → descartar ruido obvio
                     if self.es_ruido_obvio(valor):
                         es_valido = False
 
@@ -172,7 +184,6 @@ class MotorFiltro:
                 clave_unica = f"{nombre}:{valor[:80]}"
                 if clave_unica not in ya_encontrado:
                     ya_encontrado.add(clave_unica)
-                    # Creamos el hallazgo
                     hallazgo = {
                         "tipo": nombre,
                         "valor": valor,
@@ -187,7 +198,6 @@ class MotorFiltro:
                         if blockchain:
                             enriquecido = self._enriquecer_direccion(valor, blockchain)
                             if enriquecido:
-                                # Guardar el enriquecimiento en un archivo separado
                                 try:
                                     with open(config.BLOCKCHAIN_INSIGHTS_FILE, "a", encoding="utf-8") as f:
                                         f.write(json.dumps(enriquecido, indent=2) + "\n")
@@ -195,14 +205,91 @@ class MotorFiltro:
                                 except Exception as e:
                                     print(f"   ⚠️ Error guardando insight blockchain: {e}")
 
+        # --- 2. Detección de dominios clonados (phishing) ---
+        if config.ENABLE_PHISHING_DETECTION and self.phishing_detector:
+            # Buscar URLs en el texto (simple regex)
+            urls_encontradas = re.findall(r'https?://[^\s<>"\']+', texto)
+            for url in urls_encontradas:
+                try:
+                    dominio = url.split('/')[2]  # Extraer dominio
+                    es_clon, legitimo, similitud = self.phishing_detector.es_clon(dominio)
+                    if es_clon:
+                        hallazgo_clon = {
+                            "tipo": "Dominio Clonado (Phishing)",
+                            "valor": dominio,
+                            "origen": origen,
+                            "peligro": "🔴 ALTO",
+                            "detalles": f"Clon de {legitimo} (similitud: {similitud:.2%})"
+                        }
+                        # Añadir a hallazgos y guardar
+                        hallazgos.append(hallazgo_clon)
+                        self.guardar_hallazgo(hallazgo_clon)
+                        print(f"   🚨 DOMINIO CLONADO: {dominio} → imita a {legitimo} (similitud: {similitud:.2%})")
+                except Exception:
+                    pass  # Silenciar errores de parseo
+
+        # --- 3. Análisis de archivos JavaScript ---
+        if config.ENABLE_JS_ANALYSIS and self.js_analyzer:
+            # Si el origen termina en .js o el contenido parece JS (opcional)
+            if origen.endswith('.js') or ('function' in texto and 'var' in texto and '=' in texto):
+                resultados_js = self.js_analyzer.analizar_js(texto, origen)
+                # Procesar cada tipo de hallazgo
+                for endpoint in resultados_js['endpoints']:
+                    if endpoint:
+                        hallazgo_js = {
+                            "tipo": "Endpoint API (JS)",
+                            "valor": endpoint,
+                            "origen": origen,
+                            "peligro": "🟡 MEDIO"
+                        }
+                        hallazgos.append(hallazgo_js)
+                        self.guardar_hallazgo(hallazgo_js)
+                        print(f"   📡 Endpoint encontrado: {endpoint}")
+                for addr in resultados_js['crypto_addresses']:
+                    if addr:
+                        hallazgo_js = {
+                            "tipo": "Dirección Cripto (JS)",
+                            "valor": addr,
+                            "origen": origen,
+                            "peligro": "🔴 ALTO"
+                        }
+                        hallazgos.append(hallazgo_js)
+                        self.guardar_hallazgo(hallazgo_js)
+                        print(f"   💰 Dirección cripto en JS: {addr}")
+                        # Intentar enriquecer con blockchain
+                        blockchain = self._detectar_blockchain(addr)
+                        if blockchain:
+                            enriquecido = self._enriquecer_direccion(addr, blockchain)
+                            if enriquecido:
+                                try:
+                                    with open(config.BLOCKCHAIN_INSIGHTS_FILE, "a", encoding="utf-8") as f:
+                                        f.write(json.dumps(enriquecido, indent=2) + "\n")
+                                    print(f"   🔗 Blockchain enriquecida: {addr} - Balance: {enriquecido.get('balance', 'N/A')}")
+                                except Exception as e:
+                                    print(f"   ⚠️ Error guardando insight blockchain: {e}")
+                for token in resultados_js['keys_tokens']:
+                    if token:
+                        hallazgo_js = {
+                            "tipo": "Clave/Token (JS)",
+                            "valor": token,
+                            "origen": origen,
+                            "peligro": "🔴 ALTO"
+                        }
+                        hallazgos.append(hallazgo_js)
+                        self.guardar_hallazgo(hallazgo_js)
+                        print(f"   🔑 Clave/Token en JS: {token}")
+
         if ruido_descartado > 0:
             print(f"   🧹 {ruido_descartado} coincidencias descartadas en: {origen[:50]}")
         return hallazgos
 
     def guardar_hallazgo(self, hallazgo):
-        # ✅ Tu formato original + nivel de peligro
-        linea = f"{hallazgo['peligro']} | [{hallazgo['tipo']}] {hallazgo['valor']} → {hallazgo['origen']}\n"
+        # Si tiene detalles adicionales, los incluimos
+        detalles = hallazgo.get('detalles', '')
+        linea = f"{hallazgo['peligro']} | [{hallazgo['tipo']}] {hallazgo['valor']} → {hallazgo['origen']}"
+        if detalles:
+            linea += f" (Detalles: {detalles})"
+        linea += "\n"
         with open("hallazgos.txt", "a", encoding="utf-8") as f:
             f.write(linea)
-        # ✅ Tu mensaje original mejorado
         print(f"✅ {hallazgo['peligro']} HALLAZGO: {hallazgo['tipo']} → {hallazgo['valor'][:50]}...")
