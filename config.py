@@ -29,13 +29,13 @@ SENSITIVE_PATHS = ["/.env", "/config.json", "/robots.txt", "/sitemap.xml", "/man
 # =====================================================
 # CONFIGURACIÓN DE BLOCKCHAIN APIS
 # =====================================================
-TRONSCAN_API_KEY = "47f1caa1-dcff-4ac6-90c7-2e8a461ef664"  # Tu API key de Tronscan 
+TRONSCAN_API_KEY = "47f1caa1-dcff-4ac6-90c7-2e8a461ef664"  # Tu API key de Tronscan (Free Plan: 5 calls/s, 100k/day)
 ETHERSCAN_API_KEY = ""          # Si tienes, ponla aquí (Free Plan: 5 calls/s, 100k/day)
 BSCSCAN_API_KEY = ""            # Si tienes, ponla aquí (Free Plan: 5 calls/s, 100k/day)
 
-# Límites de Tronscan 
-MAX_CALLS_PER_SECOND = 5        # 5 llamadas por segundo 
-MAX_CALLS_PER_DAY = 100000      # 100,000 llamadas por día 
+# Límites de Tronscan (según tu plan)
+MAX_CALLS_PER_SECOND = 5        # 5 llamadas por segundo (Free Plan)
+MAX_CALLS_PER_DAY = 100000      # 100,000 llamadas por día (Free Plan)
 
 # Activar análisis blockchain automático
 AUTO_BLOCKCHAIN_ANALYSIS = True  # Si False, solo guarda la dirección sin consultar
