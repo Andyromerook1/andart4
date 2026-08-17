@@ -1,5 +1,7 @@
 import re
 import json
+import config  # Importamos la configuración
+from blockchain_client import BlockchainClient  # Nuestro nuevo módulo
 
 class MotorFiltro:
     # Patrones que NO distinguen mayúsculas/minúsculas
@@ -85,6 +87,14 @@ class MotorFiltro:
             banderas = re.IGNORECASE if any(ignorado in nombre for ignorado in self.IGNORE_CASE) else 0
             self.patrones[nombre] = re.compile(regex, banderas)
 
+        # Inicializamos el cliente blockchain solo si está activado
+        self.blockchain_client = None
+        if config.AUTO_BLOCKCHAIN_ANALYSIS:
+            try:
+                self.blockchain_client = BlockchainClient()
+            except Exception as e:
+                print(f"⚠️ Error inicializando BlockchainClient: {e}")
+
     def _nivel_peligro(self, nombre):
         """Clasifica automáticamente sin romper nada"""
         if any(peligro in nombre for peligro in self.ALTO_RIESGO):
@@ -92,6 +102,44 @@ class MotorFiltro:
         if any(peligro in nombre for peligro in self.MEDIO_RIESGO):
             return "🟡 MEDIO"
         return "🟢 BAJO"
+
+    def _detectar_blockchain(self, texto):
+        """Detecta la blockchain según el prefijo de la dirección."""
+        texto = texto.strip()
+        if texto.startswith('0x'):
+            return 'ethereum'
+        elif texto.startswith('T'):
+            return 'tron'
+        elif texto.startswith('bc1') or texto.startswith('1') or texto.startswith('3'):
+            return 'bitcoin'
+        elif texto.startswith('addr1'):
+            return 'cardano'
+        elif texto.startswith('r'):
+            return 'ripple'
+        elif texto.startswith('L') or texto.startswith('M') or texto.startswith('ltc1'):
+            return 'litecoin'
+        elif texto.startswith('D'):
+            return 'dogecoin'
+        else:
+            # Podría ser Solana (sin prefijo fijo, longitud 43-44)
+            if 43 <= len(texto) <= 44 and re.match(r'^[A-Za-z0-9]{43,44}$', texto):
+                return 'solana'
+            return None
+
+    def _enriquecer_direccion(self, direccion, blockchain):
+        """Consulta la blockchain para enriquecer una dirección."""
+        if not self.blockchain_client:
+            return None
+        try:
+            # Solo soportamos tron, ethereum, bsc por ahora (las que tienen API)
+            if blockchain in ['tron', 'ethereum', 'bsc']:
+                return self.blockchain_client.analyze_address(direccion, blockchain)
+            else:
+                # Para otras cadenas, podríamos hacer consultas específicas (ej. Blockchair)
+                return None
+        except Exception as e:
+            print(f"⚠️ Error en análisis blockchain para {direccion}: {e}")
+            return None
 
     def escanear_texto(self, texto, origen="desconocido"):
         hallazgos = []
@@ -124,12 +172,28 @@ class MotorFiltro:
                 clave_unica = f"{nombre}:{valor[:80]}"
                 if clave_unica not in ya_encontrado:
                     ya_encontrado.add(clave_unica)
-                    hallazgos.append({
+                    # Creamos el hallazgo
+                    hallazgo = {
                         "tipo": nombre,
                         "valor": valor,
                         "origen": origen,
                         "peligro": self._nivel_peligro(nombre)
-                    })
+                    }
+                    hallazgos.append(hallazgo)
+
+                    # Si es una dirección de criptomoneda, enriquecer
+                    if "Billetera" in nombre or any(c in nombre for c in ["BTC", "ETH", "TRX", "SOL", "ADA", "XRP"]):
+                        blockchain = self._detectar_blockchain(valor)
+                        if blockchain:
+                            enriquecido = self._enriquecer_direccion(valor, blockchain)
+                            if enriquecido:
+                                # Guardar el enriquecimiento en un archivo separado
+                                try:
+                                    with open(config.BLOCKCHAIN_INSIGHTS_FILE, "a", encoding="utf-8") as f:
+                                        f.write(json.dumps(enriquecido, indent=2) + "\n")
+                                    print(f"   🔗 Blockchain enriquecida: {valor} - Balance: {enriquecido.get('balance', 'N/A')}")
+                                except Exception as e:
+                                    print(f"   ⚠️ Error guardando insight blockchain: {e}")
 
         if ruido_descartado > 0:
             print(f"   🧹 {ruido_descartado} coincidencias descartadas en: {origen[:50]}")
