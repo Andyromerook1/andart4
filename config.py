@@ -42,3 +42,9 @@ AUTO_BLOCKCHAIN_ANALYSIS = True  # Si False, solo guarda la dirección sin consu
 
 # Ruta para guardar insights de blockchain
 BLOCKCHAIN_INSIGHTS_FILE = "blockchain_insights.txt"
+
+# =====================================================
+# CONFIGURACIÓN DE DETECCIÓN DE PHISHING Y ANÁLISIS JS
+# =====================================================
+ENABLE_PHISHING_DETECTION = True   # Detectar dominios clonados
+ENABLE_JS_ANALYSIS = True          # Analizar archivos JavaScript para extraer endpoints y tokens
