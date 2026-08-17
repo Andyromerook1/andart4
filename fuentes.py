@@ -1,3 +1,4 @@
+# fuentes.py (versión ampliada con más semillas)
 import requests
 import random
 
@@ -18,7 +19,6 @@ class FuentesSemillas:
         # 🏛️ BLOQUE 1: DIRECTORIOS Y CATÁLOGOS QUE ENLAZAN A TODO
         # =====================================================
         urls.extend([
-            # Datos abiertos y portales internacionales
             "https://data.worldbank.org",
             "https://datacatalog.worldbank.org",
             "https://data.europa.eu",
@@ -43,58 +43,37 @@ class FuentesSemillas:
         # 🇪🇸 BLOQUE 2: IBEROAMÉRICA Y ESPAÑA
         # =====================================================
         urls.extend([
-            # Argentina
             "https://www.argentina.gob.ar",
             "https://datos.gob.ar",
             "https://www.boletinoficial.gob.ar",
-            # México
             "https://www.gob.mx",
             "https://www.datos.gob.mx",
-            # Brasil
             "https://www.gov.br",
             "https://dados.gov.br",
-            # España
             "https://www.mpr.gob.es",
             "https://www.boe.es",
             "https://administracion.gob.es",
-            # Chile
             "https://www.gob.cl",
             "https://datos.gob.cl",
-            # Colombia
             "https://www.gov.co",
             "https://www.datos.gov.co",
-            # Perú
             "https://www.gob.pe",
             "https://www.datos.gob.pe",
-            # Uruguay
             "https://www.gub.uy",
             "https://datos.gub.uy",
-            # Ecuador
             "https://www.gob.ec",
             "https://www.datos.gob.ec",
-            # Paraguay
             "https://www.gov.py",
-            # Bolivia
             "https://www.gob.bo",
-            # Venezuela
             "https://www.gob.ve",
-            # Guatemala
             "https://www.gob.gt",
-            # El Salvador
             "https://www.gob.sv",
-            # Honduras
             "https://www.gob.hn",
-            # Nicaragua
             "https://www.gob.ni",
-            # Costa Rica
             "https://www.gob.cr",
-            # Panamá
             "https://www.gob.pa",
-            # República Dominicana
             "https://www.gob.do",
-            # Cuba
             "https://www.gob.cu",
-            # Puerto Rico
             "https://www.pr.gov",
         ])
 
@@ -102,21 +81,16 @@ class FuentesSemillas:
         # 🇺🇸 BLOQUE 3: NORTEAMÉRICA Y ANGLÓFONOS
         # =====================================================
         urls.extend([
-            # EE.UU.
             "https://www.usa.gov",
             "https://www.data.gov",
             "https://www.whitehouse.gov",
             "https://www.congress.gov",
-            # Canadá
             "https://www.canada.ca",
             "https://open.canada.ca",
-            # Reino Unido
             "https://www.gov.uk",
             "https://data.gov.uk",
-            # Australia
             "https://www.gov.au",
             "https://data.gov.au",
-            # Nueva Zelanda
             "https://www.govt.nz",
             "https://www.data.govt.nz",
         ])
@@ -128,38 +102,23 @@ class FuentesSemillas:
             "https://european-union.europa.eu",
             "https://ec.europa.eu",
             "https://www.europarl.europa.eu",
-            # Francia
             "https://www.service-public.fr",
             "https://www.gouv.fr",
-            # Alemania
             "https://www.bund.de",
             "https://www.deutschland.de",
-            # Italia
             "https://www.governo.it",
-            # Portugal
             "https://www.portugal.gov.pt",
-            # Polonia
             "https://www.gov.pl",
-            # Países Bajos
             "https://www.rijksoverheid.nl",
-            # Bélgica
             "https://www.belgium.be",
-            # Suiza
             "https://www.admin.ch",
-            # Suecia
             "https://www.regeringen.se",
-            # Noruega
             "https://www.regjeringen.no",
-            # Dinamarca
             "https://www.regeringen.dk",
-            # Finlandia
             "https://www.valtioneuvosto.fi",
-            # Grecia
             "https://www.gov.gr",
-            # Rusia
             "https://www.gov.ru",
             "https://www.kremlin.ru",
-            # Ucrania
             "https://www.kmu.gov.ua",
         ])
 
@@ -167,37 +126,23 @@ class FuentesSemillas:
         # 🇨🇳 BLOQUE 5: ASIA Y OCEANÍA
         # =====================================================
         urls.extend([
-            # China
             "https://www.gov.cn",
             "https://www.www.gov.cn",
-            # Japón
             "https://www.japan.go.jp",
             "https://www.kantei.go.jp",
-            # India
             "https://www.india.gov.in",
             "https://data.gov.in",
-            # Corea del Sur
             "https://www.korea.kr",
             "https://www.go.kr",
-            # Singapur
             "https://www.gov.sg",
-            # Filipinas
             "https://www.gov.ph",
-            # Tailandia
             "https://www.thaigov.go.th",
-            # Vietnam
             "https://www.gov.vn",
-            # Malasia
             "https://www.gov.my",
-            # Indonesia
             "https://www.kemendag.go.id",
-            # Arabia Saudita
             "https://www.saudi.gov.sa",
-            # Emiratos Árabes
             "https://u.ae",
-            # Israel
             "https://www.gov.il",
-            # Turquía
             "https://www.turkiye.gov.tr",
         ])
 
@@ -205,54 +150,45 @@ class FuentesSemillas:
         # 🇿🇦 BLOQUE 6: ÁFRICA
         # =====================================================
         urls.extend([
-            "https://www.gov.za",          # Sudáfrica
-            "https://www.nigeria.gov.ng",  # Nigeria
-            "https://www.egypt.gov.eg",    # Egipto
-            "https://www.maroc.ma",        # Marruecos
-            "https://www.gouv.sn",         # Senegal
-            "https://www.gouv.ci",         # Costa de Marfil
-            "https://www.mfa.gov.et",      # Etiopía
-            "https://www.ug.go.ug",        # Uganda
-            "https://www.tanzania.go.tz",  # Tanzania
-            "https://www.gov.ke",          # Kenia
-            "https://www.rwanda.gov.rw",   # Ruanda
-            "https://www.gov.gh",          # Ghana
-            "https://www.mozambique.gov.mz", # Mozambique
-            "https://www.angola.gov.ao",   # Angola
-            "https://www.algeria.gov.dz",  # Argelia
-            "https://www.tunisie.tn",      # Túnez
+            "https://www.gov.za",
+            "https://www.nigeria.gov.ng",
+            "https://www.egypt.gov.eg",
+            "https://www.maroc.ma",
+            "https://www.gouv.sn",
+            "https://www.gouv.ci",
+            "https://www.mfa.gov.et",
+            "https://www.ug.go.ug",
+            "https://www.tanzania.go.tz",
+            "https://www.gov.ke",
+            "https://www.rwanda.gov.rw",
+            "https://www.gov.gh",
+            "https://www.mozambique.gov.mz",
+            "https://www.angola.gov.ao",
+            "https://www.algeria.gov.dz",
+            "https://www.tunisie.tn",
         ])
 
         # =====================================================
         # 📖 BLOQUE 7: WIKIPEDIA — LA LLAVE MAESTRA
         # =====================================================
         urls.extend([
-            # Español
             "https://es.wikipedia.org/wiki/Portada",
             "https://es.wikipedia.org/wiki/Anexo:Pa%C3%ADses_del_mundo",
             "https://es.wikipedia.org/wiki/Categor%C3%ADa:Gobiernos_nacionales",
             "https://es.wikipedia.org/wiki/Categor%C3%ADa:Municipios_por_pa%C3%ADs",
             "https://es.wikipedia.org/wiki/Anexo:Organizaciones_internacionales",
-            # Inglés
             "https://en.wikipedia.org/wiki/List_of_sovereign_states",
             "https://en.wikipedia.org/wiki/List_of_governments",
             "https://en.wikipedia.org/wiki/List_of_countries_and_dependencies",
             "https://en.wikipedia.org/wiki/Category:Governments_by_country",
             "https://en.wikipedia.org/wiki/Category:Municipalities_by_country",
-            # Francés
             "https://fr.wikipedia.org/wiki/Liste_des_pays_du_monde",
             "https://fr.wikipedia.org/wiki/Gouvernement",
-            # Alemán
             "https://de.wikipedia.org/wiki/Liste_der_Staaten_der_Erde",
-            # Portugués
             "https://pt.wikipedia.org/wiki/Lista_de_pa%C3%ADses",
-            # Italiano
             "https://it.wikipedia.org/wiki/Lista_di_stati_del_mondo",
-            # Ruso
             "https://ru.wikipedia.org/wiki/%D0%A1%D0%BF%D0%B8%D1%81%D0%BE%D0%BA_%D0%B3%D0%BE%D1%81%D1%83%D0%B4%D0%B0%D1%80%D1%81%D1%82%D0%B2",
-            # Árabe
             "https://ar.wikipedia.org/wiki/قائمة_الدول",
-            # Chino
             "https://zh.wikipedia.org/wiki/世界各国列表",
         ])
 
@@ -275,11 +211,10 @@ class FuentesSemillas:
         ])
 
         # =====================================================
-        # 🏙️ BLOQUE 9: MUNICIPALIDADES Y GOBIERNOS LOCALES 🌍
+        # 🏙️ BLOQUE 9: MUNICIPALIDADES Y GOBIERNOS LOCALES
         # =====================================================
-        # ⚡ ESTAS SON LAS PÁGINAS QUE LISTAN CIENTOS DE MUNICIPIOS → EL BOT LOS SIGUE
         urls.extend([
-            # --- ARGENTINA ---
+            # ARGENTINA
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_Argentina",
             "https://es.wikipedia.org/wiki/Anexo:Comunas_de_la_provincia_de_Buenos_Aires",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_provincia_de_C%C3%B3rdoba",
@@ -302,11 +237,9 @@ class FuentesSemillas:
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_provincia_de_Misiones",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_provincia_de_Formosa",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_provincia_de_Chaco",
-            "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_provincia_de_La_Pampa",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_provincia_de_Santa_Cruz",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_provincia_de_Tierra_del_Fuego",
-
-            # --- MÉXICO ---
+            # MÉXICO
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_M%C3%A9xico",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Jalisco",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Nuevo_Le%C3%B3n",
@@ -338,8 +271,7 @@ class FuentesSemillas:
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Guerrero",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Morelos",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Tlaxcala",
-
-            # --- ESPAÑA ---
+            # ESPAÑA
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Espa%C3%B1a",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_Comunidad_de_Madrid",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_la_provincia_de_Barcelona",
@@ -361,8 +293,7 @@ class FuentesSemillas:
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Navarra",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Ceuta",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Melilla",
-
-            # --- BRASIL ---
+            # BRASIL
             "https://pt.wikipedia.org/wiki/Lista_de_munic%C3%ADpios_do_Brasil",
             "https://pt.wikipedia.org/wiki/Lista_de_munic%C3%ADpios_do_estado_de_S%C3%A3o_Paulo",
             "https://pt.wikipedia.org/wiki/Lista_de_munic%C3%ADpios_do_Rio_de_Janeiro",
@@ -388,8 +319,7 @@ class FuentesSemillas:
             "https://pt.wikipedia.org/wiki/Lista_de_munic%C3%ADpios_de_Tocantins",
             "https://pt.wikipedia.org/wiki/Lista_de_munic%C3%ADpios_de_Rond%C3%B4nia",
             "https://pt.wikipedia.org/wiki/Lista_de_munic%C3%ADpios_do_Acre",
-
-            # --- CHILE, COLOMBIA, PERÚ, URUGUAY, PARAGUAY, BOLIVIA, VENEZUELA ---
+            # CHILE, COLOMBIA, PERÚ, URUGUAY, PARAGUAY, BOLIVIA, VENEZUELA
             "https://es.wikipedia.org/wiki/Anexo:Comunas_de_Chile",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Colombia",
             "https://es.wikipedia.org/wiki/Anexo:Distritos_del_Per%C3%BA",
@@ -407,8 +337,7 @@ class FuentesSemillas:
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Rep%C3%BAblica_Dominicana",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Cuba",
             "https://es.wikipedia.org/wiki/Anexo:Municipios_de_Puerto_Rico",
-
-            # --- ESTADOS UNIDOS Y CANADÁ ---
+            # ESTADOS UNIDOS Y CANADÁ
             "https://en.wikipedia.org/wiki/List_of_municipalities_in_the_United_States",
             "https://en.wikipedia.org/wiki/List_of_cities_in_the_United_States",
             "https://en.wikipedia.org/wiki/List_of_United_States_cities_by_population",
@@ -438,8 +367,7 @@ class FuentesSemillas:
             "https://en.wikipedia.org/wiki/List_of_municipalities_in_Missouri",
             "https://en.wikipedia.org/wiki/List_of_municipalities_in_Nevada",
             "https://en.wikipedia.org/wiki/List_of_municipalities_in_Canada",
-
-            # --- EUROPA NO HISPANA ---
+            # EUROPA NO HISPANA
             "https://en.wikipedia.org/wiki/List_of_municipalities_in_the_United_Kingdom",
             "https://en.wikipedia.org/wiki/List_of_cities_in_the_United_Kingdom",
             "https://en.wikipedia.org/wiki/List_of_municipalities_in_France",
@@ -462,8 +390,7 @@ class FuentesSemillas:
             "https://en.wikipedia.org/wiki/List_of_municipalities_in_Ukraine",
             "https://en.wikipedia.org/wiki/List_of_local_government_areas_in_Australia",
             "https://en.wikipedia.org/wiki/List_of_twinned_cities_and_towns_in_the_United_States",
-
-            # --- ASIA Y OCEANÍA ---
+            # ASIA Y OCEANÍA
             "https://en.wikipedia.org/wiki/List_of_cities_in_China",
             "https://en.wikipedia.org/wiki/List_of_cities_in_Japan",
             "https://en.wikipedia.org/wiki/List_of_cities_in_India",
@@ -481,8 +408,7 @@ class FuentesSemillas:
             "https://en.wikipedia.org/wiki/List_of_cities_in_Turkey",
             "https://en.wikipedia.org/wiki/List_of_cities_in_New_Zealand",
             "https://en.wikipedia.org/wiki/List_of_cities_in_Australia",
-
-            # --- ÁFRICA ---
+            # ÁFRICA
             "https://en.wikipedia.org/wiki/List_of_cities_in_South_Africa",
             "https://en.wikipedia.org/wiki/List_of_cities_in_Nigeria",
             "https://en.wikipedia.org/wiki/List_of_cities_in_Egypt",
@@ -501,6 +427,191 @@ class FuentesSemillas:
         ])
 
         # =====================================================
+        # 🎰 BLOQUE 10: APUESTAS Y CASINOS (solo aquellos con alto riesgo de estafa)
+        # =====================================================
+        urls.extend([
+            # Casinos crypto y plataformas de apuestas con reputación dudosa o sin licencia clara
+            "https://www.stake.com",             # Casino crypto (muy popular, pero con quejas de retiros)
+            "https://www.bitstarz.com",          # Casino crypto
+            "https://www.bitcasino.io",          # Casino crypto
+            "https://www.mbitcasino.com",        # Casino crypto
+            "https://www.rollbit.com",           # Casino crypto (con componentes de apuestas deportivas)
+            "https://www.shuffle.com",           # Casino crypto
+            "https://www.duckdice.io",           # Casino crypto
+            "https://www.bc.game",               # Casino crypto
+            "https://www.cloudbet.com",          # Casino crypto (deportes)
+            "https://www.fortunejack.com",       # Casino crypto
+            # Casinos en línea con muchas quejas de estafa
+            "https://www.casinogo.com",
+            "https://www.vero.casino",
+            "https://www.kingbillycasino.com",
+            "https://www.wildz.com",
+            "https://www.dreams.com",
+            "https://www.enjoy.cl",              # Casino chileno con denuncias
+            "https://www.marina.cl",             # Casino chileno
+            "https://www.casinoar.com",          # Casino argentino (puede tener problemas)
+            # Apuestas deportivas con presencia en mercados grises
+            "https://www.betano.com",            # Apuestas (quejas de retiros)
+            "https://www.betsafe.com",           # Apuestas
+            "https://www.comeon.com",            # Apuestas
+            "https://www.bet-at-home.com",       # Apuestas (problemas en algunos países)
+            # Casinos físicos con presencia online (pueden tener información de lavado)
+            "https://www.viejas.com",
+            "https://www.sycuan.com",
+            "https://www.pechanga.com",
+            "https://www.mohegansun.com",
+            "https://www.foxwoods.com",
+            "https://www.winstar.com",
+            "https://www.choctawcasinos.com",
+            "https://www.hardrockcasino.com",
+            "https://www.seminolehardrock.com",
+            "https://www.venetian.com",
+            "https://www.bellagio.com",
+            "https://www.aria.com",
+            "https://www.mgmresorts.com",
+            "https://www.caesars.com",
+            "https://www.borgata.com",
+            "https://www.tropicana.net",
+            "https://www.goldennugget.com",
+            "https://www.riverscasino.com",
+            "https://www.harrahs.com",
+            "https://www.eldoradoreno.com",
+            "https://www.circuscircus.com",
+            "https://www.excalibur.com",
+            "https://www.luxor.com",
+            "https://www.mandalaybay.com",
+            "https://www.thecosmopolitan.com",
+            "https://www.palace.com",
+            "https://www.wynnresorts.com",
+            "https://www.encoreboston.com",
+        ])
+
+        # =====================================================
+        # 🕵️ BLOQUE 11: FOROS DE ESTAFAS, CRIPTO Y PHISHING
+        # =====================================================
+        urls.extend([
+            # Foros de estafas, fraudes, phising
+            "https://www.ripoffreport.com",
+            "https://www.scamwarners.com",
+            "https://www.antifraud.org",
+            "https://www.trustpilot.com",
+            "https://www.sitejabber.com",
+            "https://www.bbb.org",
+            "https://www.scamadviser.com",
+            "https://www.cybersecurity.com",
+            "https://www.hackread.com",
+            "https://www.cybernews.com",
+            "https://www.krebsonsecurity.com",
+            "https://www.schneier.com",
+            "https://www.bleepingcomputer.com",
+            "https://www.malwarebytes.com",
+            "https://www.virustotal.com",
+            "https://www.threatpost.com",
+            "https://www.zerodayinitiative.com",
+            "https://www.pwned.com",
+            "https://www.haveibeenpwned.com",
+            # Foros de crypto y trading
+            "https://www.bitcointalk.org",
+            "https://www.cryptocompare.com",
+            "https://www.coingecko.com",
+            "https://www.coinmarketcap.com",
+            "https://www.tradingview.com",
+            "https://www.investing.com",
+            "https://www.forexfactory.com",
+            "https://www.mql5.com",
+            "https://www.quantconnect.com",
+            "https://www.nasdaq.com",
+            "https://www.nyse.com",
+            "https://www.bloomberg.com/markets",
+            "https://www.reuters.com/markets",
+            "https://www.ft.com",
+            "https://www.wsj.com",
+            "https://www.economist.com",
+            "https://www.cnbc.com",
+            "https://www.marketwatch.com",
+            # Páginas de phishing conocidas (dominios clonados) - estos son legítimos pero pueden tener clones
+            "https://www.paypal.com",
+            "https://www.ebay.com",
+            "https://www.amazon.com",
+            "https://www.apple.com",
+            "https://www.microsoft.com",
+            "https://www.google.com",
+            "https://www.facebook.com",
+            "https://www.instagram.com",
+            "https://www.twitter.com",
+            "https://www.linkedin.com",
+            "https://www.dropbox.com",
+            "https://www.onedrive.com",
+            "https://www.gofundme.com",
+            "https://www.kickstarter.com",
+            "https://www.indiegogo.com",
+            # Subastas y marketplace
+            "https://www.alibaba.com",
+            "https://www.aliexpress.com",
+            "https://www.mercadolibre.com",
+            "https://www.mercadolibre.com.ar",
+            "https://www.mercadolibre.com.mx",
+            "https://www.mercadolibre.com.br",
+            "https://www.olx.com",
+            "https://www.wallapop.com",
+            "https://www.vinted.com",
+            "https://www.etsy.com",
+            "https://www.shopify.com",
+            "https://www.wix.com",
+            "https://www.weebly.com",
+            "https://www.squarespace.com",
+            "https://www.wordpress.com",
+            "https://www.blogger.com",
+            "https://www.tumblr.com",
+            "https://www.medium.com",
+            "https://www.reddit.com",
+            "https://www.quora.com",
+            "https://www.stackoverflow.com",
+            "https://www.github.com",
+            "https://www.gitlab.com",
+            "https://www.bitbucket.org",
+        ])
+
+        # =====================================================
+        # 🧅 BLOQUE 12: DEEP WEB / TOR (Onion links)
+        # =====================================================
+        urls.extend([
+            # Directorios y buscadores Tor (algunos pueden estar caídos, pero se intentan)
+            "http://duskgytldkxiuqc6.onion",        # The Hidden Wiki (verificar)
+            "http://zqktlwiuavvvqqt4.onion",        # The Hidden Wiki (alternativo)
+            "http://torlinksd6pdnihy.onion",        # Tor Links
+            "http://onionlinksjr4d2i7.onion",       # Onion Links
+            "http://xmh57jrzrnw6insl.onion",        # Tor Search
+            "http://hss3uro2hsxfogfq.onion",        # Onion Search Engine
+            "http://msydqstlz2kzerdg.onion",        # Ahmia (buscador)
+            "http://ahmiadnbyx5m7qwx.onion",        # Ahmia (mirror)
+            "http://wikidplw7h6b3fvg.onion",        # Wikipedia Tor
+            "http://check.torproject.org",          # Check Tor (no es onion pero útil)
+            "http://facebookcorewwwi.onion",        # Facebook Onion
+            "http://twitter3e4tixl4xy.onion",       # Twitter Onion
+            "http://protonmailrmez3lotccipshtkleegetolb73fuirgj7r4o4vfu7ozyd.onion", # ProtonMail
+            "http://secmailw453j7piv.onion",        # SecMail
+            "http://mailtorxbyap6t7o.onion",        # MailTor
+            "http://bitcoinheist.com",              # Bitcoin Heist (análisis)
+            "http://blockchainbdgpzk.onion",        # Blockchain.info Onion
+            "http://dnmooooddf3d3ffq.onion",        # Deep Net Market
+            "http://silkroad6ownowfk.onion",        # Silk Road (histórico)
+            "http://alphabaym2fgs3ew.onion",        # AlphaBay (histórico)
+            "http://hydraclubbioknikokex7njhwuahc2l67lfiz7z36md2jvopda7nchid.onion", # Hydra (histórico)
+            "http://asap2u4pvln7f3lo.onion",        # ASAP Market
+            "http://whitehouse2i6z2s7.onion",       # White House Market
+            "http://darknetlive.com",               # DarkNet Live
+            "http://www.gwern.net",                 # Gwern (análisis)
+            "http://www.cia.gov",                   # CIA (no onion, pero útil)
+            "http://www.nytimes.com",               # NYTimes
+            "http://www.bbc.com",                   # BBC
+            "http://www.propublica.org",            # ProPublica
+            "http://www.globaleaks.org",            # GlobalLeaks
+            "http://www.securechat.com",            # SecureChat
+            "http://www.riseup.net",                # RiseUp
+        ])
+
+        # =====================================================
         # ✅ ELIMINAR DUPLICADOS Y DEVOLVER
         # =====================================================
         urls_unicas = list(dict.fromkeys(urls))
@@ -511,6 +622,9 @@ class FuentesSemillas:
         print(f"🌏 Asia: {sum(1 for u in urls_unicas if '.cn' in u or '.jp' in u or '.in' in u or '.kr' in u or '.sg' in u)}")
         print(f"🌍 África: {sum(1 for u in urls_unicas if '.za' in u or '.ng' in u or '.eg' in u or '.gov.af' in u)}")
         print(f"📖 Wikipedia: {sum(1 for u in urls_unicas if 'wikipedia.org' in u)}")
+        print(f"🎰 Apuestas/Casinos (riesgo): {sum(1 for u in urls_unicas if 'casino' in u or 'bet' in u or 'poker' in u or 'slot' in u)}")
+        print(f"🕵️ Foros de estafas/crypto: {sum(1 for u in urls_unicas if 'scam' in u or 'fraud' in u or 'crypto' in u or 'phish' in u)}")
+        print(f"🧅 Deep Web/Tor: {sum(1 for u in urls_unicas if '.onion' in u)}")
         print("="*70)
         return urls_unicas
 
