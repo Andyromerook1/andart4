@@ -54,14 +54,7 @@ class SecureRequester:
         self.timeout = timeout
         self.verify_ssl = verify_ssl
 
-        # Si usamos curl_cffi, podemos mantener una sesión persistente (opcional)
-        self.session = None
-        if HAS_CURL_CFFI:
-            # No creamos sesión aún, la crearemos por petición para evitar problemas
-            pass
-
     def _get_headers(self) -> Dict[str, str]:
-        """Genera headers realistas con User-Agent aleatorio."""
         ua = random.choice(USER_AGENTS)
         return {
             "User-Agent": ua,
@@ -81,27 +74,27 @@ class SecureRequester:
         }
 
     def _get_impersonate(self) -> str:
-        """Elige un perfil de navegador para curl_cffi."""
         return random.choice(IMPERSONATE_PROFILES)
 
     def get(self, url: str, params: Optional[Dict] = None, **kwargs) -> Optional[Any]:
         """
         Realiza una petición GET con reintentos, backoff y evasión.
-        Retorna el objeto Response (de requests o curl_cffi) o None si falla definitivamente.
+        Si la URL es .onion y no se usa Tor, retorna None silenciosamente.
         """
+        # 🔥 Manejo de .onion sin Tor: devolver None sin error
+        if '.onion' in url and not self.use_tor:
+            return None
+
         attempt = 0
         last_exception = None
 
         while attempt < self.max_retries:
             try:
                 headers = self._get_headers()
-                # Combinar headers por si el usuario pasa algunos extra
                 if "headers" in kwargs:
                     headers.update(kwargs.pop("headers"))
 
-                # Elegir método de petición
                 if HAS_CURL_CFFI:
-                    # Usamos curl_cffi con impersonate
                     response = curl_requests.get(
                         url,
                         params=params,
@@ -113,7 +106,6 @@ class SecureRequester:
                         **kwargs
                     )
                 else:
-                    # Fallback con requests estándar (sin spoofing TLS, pero con proxies)
                     proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
                     response = requests.get(
                         url,
@@ -125,36 +117,29 @@ class SecureRequester:
                         **kwargs
                     )
 
-                # Si el código es 429 o 403, lanzamos excepción para reintentar
                 if response.status_code in (429, 403):
                     raise Exception(f"Rate limit or forbidden: {response.status_code}")
 
-                # Si todo bien, retornamos la respuesta
                 return response
 
             except Exception as e:
                 last_exception = e
                 attempt += 1
                 if attempt >= self.max_retries:
-                    # Si ya no hay reintentos, salimos del bucle
                     break
-
-                # Backoff exponencial con jitter
                 sleep_time = (self.backoff_factor ** attempt) + random.uniform(0, self.jitter)
-                # Si la excepción es de timeout, podemos esperar un poco más
                 if "timeout" in str(e).lower():
                     sleep_time *= 1.5
                 time.sleep(sleep_time)
 
-        # Si llegamos aquí, todos los reintentos fallaron
-        # Podemos registrar el error o simplemente retornar None
+        # Si falló y es .onion, no imprimir error (ya se manejó arriba)
+        if '.onion' in url:
+            return None
+
         print(f"❌ Falló la petición a {url} después de {self.max_retries} intentos: {last_exception}")
         return None
 
     def get_text(self, url: str, params: Optional[Dict] = None, **kwargs) -> Optional[str]:
-        """
-        Helper que retorna el texto de la respuesta si la petición fue exitosa.
-        """
         resp = self.get(url, params=params, **kwargs)
         if resp and resp.status_code == 200:
             return resp.text
