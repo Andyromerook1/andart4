@@ -1,5 +1,6 @@
 import re
 import json
+import os
 import config
 from blockchain_client import BlockchainClient
 from phishing_detector import PhishingDetector
@@ -151,10 +152,8 @@ class MotorFiltro:
         """Consulta blockchain solo si la dirección es válida y no ha fallado antes."""
         if not self.blockchain_client:
             return None
-        # Si ya falló antes, no repetir
         if direccion in self.direcciones_fallidas:
             return None
-        # Validar formato
         if not self.es_direccion_valida(direccion, blockchain):
             self.direcciones_fallidas.add(direccion)
             return None
@@ -203,7 +202,7 @@ class MotorFiltro:
                     }
                     hallazgos.append(hallazgo)
 
-                    # 🔥 Enriquecimiento blockchain con validación
+                    # Enriquecimiento blockchain con validación
                     if "Billetera" in nombre or any(c in nombre for c in ["BTC", "ETH", "TRX", "SOL", "ADA", "XRP"]):
                         blockchain = self._detectar_blockchain(valor)
                         if blockchain:
@@ -263,7 +262,6 @@ class MotorFiltro:
                         hallazgos.append(hallazgo_js)
                         self.guardar_hallazgo(hallazgo_js)
                         print(f"   💰 Dirección cripto en JS: {addr}")
-                        # 🔥 Validar y enriquecer también las direcciones de JS
                         blockchain = self._detectar_blockchain(addr)
                         if blockchain:
                             enriquecido = self._enriquecer_direccion(addr, blockchain)
@@ -296,6 +294,7 @@ class MotorFiltro:
         if detalles:
             linea += f" (Detalles: {detalles})"
         linea += "\n"
-        with open("hallazgos.txt", "a", encoding="utf-8") as f:
+        # Usamos la ruta definida en config
+        with open(config.HALLAZGOS_FILE, "a", encoding="utf-8") as f:
             f.write(linea)
         print(f"✅ {hallazgo['peligro']} HALLAZGO: {hallazgo['tipo']} → {hallazgo['valor'][:50]}...")
