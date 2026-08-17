@@ -1,9 +1,16 @@
+# filtro.py
 import re
 import json
 import config
 from blockchain_client import BlockchainClient
 from phishing_detector import PhishingDetector
 from js_analyzer import JSAnalyzer
+
+# Tipos que son cuentas financieras tradicionales (no se consultan contra blockchain)
+TIPOS_CUENTA_FINANCIERA = [
+    "CBU/CVU", "CLABE", "IBAN", "PIX", "SWIFT"
+]
+
 
 class MotorFiltro:
     def __init__(self, archivo_patrones="patrones.json"):
@@ -12,7 +19,7 @@ class MotorFiltro:
         self.patrones = {
             nombre: re.compile(regex)
             for nombre, regex in datos.items()
-            if regex  # ignora la clave separadora "===== CRIPTOMONEDAS ====="
+            if regex and not nombre.startswith("=====")
         }
 
         self.blockchain_client = None
@@ -37,6 +44,9 @@ class MotorFiltro:
 
         self.direcciones_fallidas = set()
 
+    # =============================================================
+    # 🧹 RUIDO / VALIDACIÓN
+    # =============================================================
     @staticmethod
     def es_ruido_obvio(valor: str) -> bool:
         s = re.sub(r'[\s\-]+', '', valor)
@@ -46,6 +56,66 @@ class MotorFiltro:
             return True
         return False
 
+    @staticmethod
+    def validar_cbu(cbu: str) -> bool:
+        """
+        Valida CBU/CVU argentino (22 dígitos) con su algoritmo real de
+        dígito verificador, para descartar los 21+ dígitos random que
+        matchean el regex pero no son una cuenta real.
+        Estructura: 3 (entidad) + 1 (DV entidad) + 3 (sucursal) + 1 (DV sucursal)
+                    + 13 (cuenta) + 1 (DV cuenta)
+        """
+        cbu = re.sub(r'\D', '', cbu)
+        if len(cbu) != 22:
+            return False
+
+        def _dv(bloque, pesos):
+            suma = sum(int(d) * p for d, p in zip(bloque, pesos))
+            resto = suma % 10
+            return 0 if resto == 0 else 10 - resto
+
+        # Primer bloque: entidad(3) + sucursal(3) + DV(1) = 8 dígitos, pesos 7-1-3-9-7-1-3
+        bloque1 = cbu[0:7]
+        dv1_esperado = int(cbu[7])
+        pesos1 = [7, 1, 3, 9, 7, 1, 3]
+        if _dv(bloque1, pesos1) != dv1_esperado:
+            return False
+
+        # Segundo bloque: cuenta(13) + DV(1) = 14 dígitos, pesos 3-9-7-1-3-9-7-1-3-9-7-1-3
+        bloque2 = cbu[8:21]
+        dv2_esperado = int(cbu[21])
+        pesos2 = [3, 9, 7, 1, 3, 9, 7, 1, 3, 9, 7, 1, 3]
+        if _dv(bloque2, pesos2) != dv2_esperado:
+            return False
+
+        return True
+
+    @staticmethod
+    def validar_iban(iban: str) -> bool:
+        """Valida IBAN con el algoritmo mod-97 estándar (ISO 7064)."""
+        iban = iban.replace(" ", "").upper()
+        if len(iban) < 15 or len(iban) > 34:
+            return False
+        reordenado = iban[4:] + iban[:4]
+        convertido = ""
+        for ch in reordenado:
+            convertido += str(int(ch, 36)) if ch.isalpha() else ch
+        try:
+            return int(convertido) % 97 == 1
+        except ValueError:
+            return False
+
+    def _es_cuenta_financiera_valida(self, nombre, valor):
+        if "CBU" in nombre:
+            return self.validar_cbu(valor)
+        if "IBAN" in nombre:
+            return self.validar_iban(valor)
+        # CLABE, PIX, SWIFT: por ahora solo validación de formato (ya la hace el regex)
+        return True
+
+    # =============================================================
+    # 🔗 BLOCKCHAIN
+    # =============================================================
     def _detectar_blockchain(self, texto):
         texto = texto.strip()
         if texto.startswith('0x'):
@@ -95,24 +165,33 @@ class MotorFiltro:
             print(f"⚠️ Error en análisis blockchain para {direccion}: {e}")
         return None
 
+    # =============================================================
+    # 🔍 ESCANEO PRINCIPAL
+    # =============================================================
     def escanear_texto(self, texto, origen="desconocido"):
         hallazgos = []
         ya_encontrado = set()
 
-        # --- 1. Patrones: email + direcciones cripto ---
+        # --- 1. Patrones: email, cuentas financieras, cripto ---
         for nombre, regex in self.patrones.items():
             for match in regex.finditer(texto):
                 valor = match.group(0).strip()
                 if not valor or len(valor) <= 5 or self.es_ruido_obvio(valor):
                     continue
+
+                es_cuenta_financiera = any(t in nombre for t in TIPOS_CUENTA_FINANCIERA)
+                if es_cuenta_financiera and not self._es_cuenta_financiera_valida(nombre, valor):
+                    continue  # descarta CBU/IBAN con dígito verificador inválido
+
                 clave_unica = f"{nombre}:{valor[:80]}"
                 if clave_unica in ya_encontrado:
                     continue
                 ya_encontrado.add(clave_unica)
+
                 hallazgo = {"tipo": nombre, "valor": valor, "origen": origen, "peligro": "🔴 ALTO"}
                 hallazgos.append(hallazgo)
 
-                if nombre != "Correo Electrónico":
+                if nombre != "Correo Electrónico" and not es_cuenta_financiera:
                     blockchain = self._detectar_blockchain(valor)
                     if blockchain:
                         enriquecido = self._enriquecer_direccion(valor, blockchain)
@@ -139,7 +218,7 @@ class MotorFiltro:
                 except Exception:
                     pass
 
-        # --- 3. Análisis JS: endpoints + direcciones cripto (SIN cosecha de claves) ---
+        # --- 3. Análisis JS: endpoints + direcciones cripto ---
         if config.ENABLE_JS_ANALYSIS and self.js_analyzer:
             if origen.endswith('.js') or ('function' in texto and 'var' in texto and '=' in texto):
                 resultados_js = self.js_analyzer.analizar_js(texto, origen)
@@ -162,9 +241,50 @@ class MotorFiltro:
                                         f.write(json.dumps(enriquecido, indent=2) + "\n")
                                 except Exception as e:
                                     print(f"   ⚠️ Error guardando insight blockchain: {e}")
-                # NOTA: se quitó el bloque que reportaba resultados_js['keys_tokens']
+
+        # --- 4. PUENTE: cuenta financiera + wallet en el mismo origen ---
+        self._detectar_puente(hallazgos, origen)
 
         return hallazgos
+
+    def _detectar_puente(self, hallazgos, origen):
+        """
+        Si en el mismo origen aparecen una cuenta financiera (CBU/IBAN/etc.)
+        Y una dirección cripto, arma un 'caso puente': la pista con dueño
+        real (cuenta bancaria) conectada con el destino final del lavado.
+        Esto es lo más accionable para un reporte a la policía/fiscalía.
+        """
+        cuentas = [h for h in hallazgos if any(t in h["tipo"] for t in TIPOS_CUENTA_FINANCIERA)]
+        wallets = [h for h in hallazgos if h["tipo"] in (
+            "Bitcoin (Legacy)", "Bitcoin (Native SegWit)", "Bitcoin (Taproot)",
+            "Ethereum / EVM (Polygon, BNB, Arbitrum, etc.)", "Solana (SOL)",
+            "Cardano (ADA)", "Ripple (XRP)", "Tron (TRX)", "Litecoin (Legacy)",
+            "Litecoin (Native SegWit)", "Dogecoin", "Dash", "Monero",
+            "Zcash (Transparent)", "Zcash (Shielded)", "Stellar (XLM)",
+            "Tezos (XTZ)", "Cosmos (ATOM)", "Polkadot (DOT)",
+            "Dirección Cripto (JS)"
+        )]
+
+        if not cuentas or not wallets:
+            return
+
+        for cuenta in cuentas:
+            for wallet in wallets:
+                caso = {
+                    "origen": origen,
+                    "cuenta_financiera": {"tipo": cuenta["tipo"], "valor": cuenta["valor"]},
+                    "wallet_cripto": {"tipo": wallet["tipo"], "valor": wallet["valor"]},
+                }
+                self._guardar_caso_puente(caso)
+                print(f"   🌉 CASO PUENTE: {cuenta['tipo']} {cuenta['valor']} ←→ {wallet['tipo']} {wallet['valor']}")
+
+    @staticmethod
+    def _guardar_caso_puente(caso):
+        try:
+            with open(config.CASOS_PUENTE_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(caso, ensure_ascii=False) + "\n")
+        except Exception as e:
+            print(f"   ⚠️ Error guardando caso puente: {e}")
 
     def guardar_hallazgo(self, hallazgo):
         detalles = hallazgo.get('detalles', '')
