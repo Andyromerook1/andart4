@@ -25,3 +25,20 @@ COMMON_PORTS = [
 
 # Rutas sensibles a probar (se mantiene igual)
 SENSITIVE_PATHS = ["/.env", "/config.json", "/robots.txt", "/sitemap.xml", "/manifest.json"]
+
+# =====================================================
+# CONFIGURACIÓN DE BLOCKCHAIN APIS
+# =====================================================
+TRONSCAN_API_KEY = "47f1caa1-dcff-4ac6-90c7-2e8a461ef664"  # Tu API key de Tronscan 
+ETHERSCAN_API_KEY = ""          # Si tienes, ponla aquí (Free Plan: 5 calls/s, 100k/day)
+BSCSCAN_API_KEY = ""            # Si tienes, ponla aquí (Free Plan: 5 calls/s, 100k/day)
+
+# Límites de Tronscan 
+MAX_CALLS_PER_SECOND = 5        # 5 llamadas por segundo 
+MAX_CALLS_PER_DAY = 100000      # 100,000 llamadas por día 
+
+# Activar análisis blockchain automático
+AUTO_BLOCKCHAIN_ANALYSIS = True  # Si False, solo guarda la dirección sin consultar
+
+# Ruta para guardar insights de blockchain
+BLOCKCHAIN_INSIGHTS_FILE = "blockchain_insights.txt"
