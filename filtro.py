@@ -39,7 +39,6 @@ class MotorFiltro:
     # =============================================================
     @staticmethod
     def validar_luhn(numero: str) -> bool:
-        """✅ Valida si una tarjeta es matemáticamente correcta"""
         digitos = [int(d) for d in numero if d.isdigit()]
         if len(digitos) < 13 or len(digitos) > 19:
             return False
@@ -56,25 +55,15 @@ class MotorFiltro:
 
     @staticmethod
     def es_ruido_obvio(valor: str) -> bool:
-        """✅ Descarta basura que no tiene sentido real"""
         s = re.sub(r'[\s\-]+', '', valor)
-        
-        # ❌ Todos los dígitos iguales → imposible
         if len(set(s)) == 1:
             return True
-        
-        # ❌ Muchos ceros seguidos o al final
         if "00000" in s or s.endswith("000000"):
             return True
-        
-        # ❌ Secuencias obvias
         if s in "0123456789" or s in "9876543210":
             return True
-        
-        # ❌ Más de la mitad son ceros
         if s.count('0') > len(s) / 2:
             return True
-        
         return False
 
     # =============================================================
@@ -83,7 +72,6 @@ class MotorFiltro:
     def __init__(self, archivo_patrones="patrones.json"):
         with open(archivo_patrones, encoding="utf-8") as f:
             datos = json.load(f)
-
         self.patrones = {}
         for nombre, regex in datos.items():
             banderas = re.IGNORECASE if any(ignorado in nombre for ignorado in self.IGNORE_CASE) else 0
@@ -97,7 +85,6 @@ class MotorFiltro:
             except Exception as e:
                 print(f"⚠️ Error inicializando BlockchainClient: {e}")
 
-        # Inicializar detector de phishing y analizador JS
         self.phishing_detector = None
         self.js_analyzer = None
         if config.ENABLE_PHISHING_DETECTION:
@@ -111,8 +98,10 @@ class MotorFiltro:
             except Exception as e:
                 print(f"⚠️ Error inicializando JSAnalyzer: {e}")
 
+        # 🔥 NUEVO: caché de direcciones fallidas para no repetir consultas
+        self.direcciones_fallidas = set()
+
     def _nivel_peligro(self, nombre):
-        """Clasifica automáticamente sin romper nada"""
         if any(peligro in nombre for peligro in self.ALTO_RIESGO):
             return "🔴 ALTO"
         if any(peligro in nombre for peligro in self.MEDIO_RIESGO):
@@ -120,7 +109,6 @@ class MotorFiltro:
         return "🟢 BAJO"
 
     def _detectar_blockchain(self, texto):
-        """Detecta la blockchain según el prefijo de la dirección."""
         texto = texto.strip()
         if texto.startswith('0x'):
             return 'ethereum'
@@ -137,23 +125,46 @@ class MotorFiltro:
         elif texto.startswith('D'):
             return 'dogecoin'
         else:
-            # Podría ser Solana (sin prefijo fijo, longitud 43-44)
             if 43 <= len(texto) <= 44 and re.match(r'^[A-Za-z0-9]{43,44}$', texto):
                 return 'solana'
-            return None
+        return None
+
+    @staticmethod
+    def es_direccion_valida(direccion, blockchain):
+        """Valida el formato de una dirección de criptomoneda antes de consultar la API."""
+        if not direccion or len(direccion) < 20:
+            return False
+        if blockchain == 'tron':
+            return bool(re.match(r'^T[a-zA-Z0-9]{33}$', direccion))
+        elif blockchain == 'ethereum':
+            return bool(re.match(r'^0x[a-fA-F0-9]{40}$', direccion))
+        elif blockchain == 'bitcoin':
+            return bool(re.match(r'^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$', direccion) or
+                        re.match(r'^bc1[a-z0-9]{39,59}$', direccion))
+        elif blockchain == 'solana':
+            return bool(re.match(r'^[A-Za-z0-9]{43,44}$', direccion))
+        else:
+            # Para otras cadenas (ADA, XRP, etc.) solo verificamos longitud
+            return len(direccion) > 25
 
     def _enriquecer_direccion(self, direccion, blockchain):
-        """Consulta la blockchain para enriquecer una dirección."""
+        """Consulta blockchain solo si la dirección es válida y no ha fallado antes."""
         if not self.blockchain_client:
             return None
+        # Si ya falló antes, no repetir
+        if direccion in self.direcciones_fallidas:
+            return None
+        # Validar formato
+        if not self.es_direccion_valida(direccion, blockchain):
+            self.direcciones_fallidas.add(direccion)
+            return None
         try:
-            # Solo soportamos tron, ethereum, bsc por ahora (las que tienen API)
             if blockchain in ['tron', 'ethereum', 'bsc']:
                 return self.blockchain_client.analyze_address(direccion, blockchain)
             else:
-                # Para otras cadenas, podríamos hacer consultas específicas (ej. Blockchair)
                 return None
         except Exception as e:
+            self.direcciones_fallidas.add(direccion)
             print(f"⚠️ Error en análisis blockchain para {direccion}: {e}")
             return None
 
@@ -161,7 +172,7 @@ class MotorFiltro:
         hallazgos = []
         ya_encontrado = set()
         ruido_descartado = 0
-        
+
         # --- 1. Escaneo de patrones generales (tu lógica original) ---
         for nombre, regex in self.patrones.items():
             for match in regex.finditer(texto):
@@ -192,7 +203,7 @@ class MotorFiltro:
                     }
                     hallazgos.append(hallazgo)
 
-                    # Si es una dirección de criptomoneda, enriquecer
+                    # 🔥 Enriquecimiento blockchain con validación
                     if "Billetera" in nombre or any(c in nombre for c in ["BTC", "ETH", "TRX", "SOL", "ADA", "XRP"]):
                         blockchain = self._detectar_blockchain(valor)
                         if blockchain:
@@ -207,11 +218,10 @@ class MotorFiltro:
 
         # --- 2. Detección de dominios clonados (phishing) ---
         if config.ENABLE_PHISHING_DETECTION and self.phishing_detector:
-            # Buscar URLs en el texto (simple regex)
             urls_encontradas = re.findall(r'https?://[^\s<>"\']+', texto)
             for url in urls_encontradas:
                 try:
-                    dominio = url.split('/')[2]  # Extraer dominio
+                    dominio = url.split('/')[2]
                     es_clon, legitimo, similitud = self.phishing_detector.es_clon(dominio)
                     if es_clon:
                         hallazgo_clon = {
@@ -221,19 +231,16 @@ class MotorFiltro:
                             "peligro": "🔴 ALTO",
                             "detalles": f"Clon de {legitimo} (similitud: {similitud:.2%})"
                         }
-                        # Añadir a hallazgos y guardar
                         hallazgos.append(hallazgo_clon)
                         self.guardar_hallazgo(hallazgo_clon)
                         print(f"   🚨 DOMINIO CLONADO: {dominio} → imita a {legitimo} (similitud: {similitud:.2%})")
                 except Exception:
-                    pass  # Silenciar errores de parseo
+                    pass
 
         # --- 3. Análisis de archivos JavaScript ---
         if config.ENABLE_JS_ANALYSIS and self.js_analyzer:
-            # Si el origen termina en .js o el contenido parece JS (opcional)
             if origen.endswith('.js') or ('function' in texto and 'var' in texto and '=' in texto):
                 resultados_js = self.js_analyzer.analizar_js(texto, origen)
-                # Procesar cada tipo de hallazgo
                 for endpoint in resultados_js['endpoints']:
                     if endpoint:
                         hallazgo_js = {
@@ -256,7 +263,7 @@ class MotorFiltro:
                         hallazgos.append(hallazgo_js)
                         self.guardar_hallazgo(hallazgo_js)
                         print(f"   💰 Dirección cripto en JS: {addr}")
-                        # Intentar enriquecer con blockchain
+                        # 🔥 Validar y enriquecer también las direcciones de JS
                         blockchain = self._detectar_blockchain(addr)
                         if blockchain:
                             enriquecido = self._enriquecer_direccion(addr, blockchain)
@@ -284,7 +291,6 @@ class MotorFiltro:
         return hallazgos
 
     def guardar_hallazgo(self, hallazgo):
-        # Si tiene detalles adicionales, los incluimos
         detalles = hallazgo.get('detalles', '')
         linea = f"{hallazgo['peligro']} | [{hallazgo['tipo']}] {hallazgo['valor']} → {hallazgo['origen']}"
         if detalles:
