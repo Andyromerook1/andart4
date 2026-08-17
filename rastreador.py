@@ -2,6 +2,7 @@
 import signal
 import sys
 import time
+import os
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 from filtro import MotorFiltro
@@ -40,6 +41,8 @@ class Rastreador:
         # Guardar checkpoint si existe la función (opcional)
         if hasattr(self, 'guardar_checkpoint'):
             self.guardar_checkpoint()
+        # Forzar salida después de la siguiente iteración
+        sys.exit(0)
 
     def es_mismo_dominio(self, base, url):
         return True
@@ -78,6 +81,7 @@ class Rastreador:
         print(f"   📄 Límite de páginas: {self.limite} (prácticamente ilimitado)")
         print(f"   🔒 Tor activado: {self.requester.use_tor}")
         print(f"   🔄 Reintentos máximos: {self.requester.max_retries}")
+        print(f"   📁 Archivos guardados en: {config.OUTPUT_BASE}")
         print("   💡 Presiona Ctrl+C para detener en cualquier momento\n")
 
         for semilla in list(self.cola):
@@ -92,7 +96,6 @@ class Rastreador:
             try:
                 resp = self.requester.get(url)
                 if resp is None or resp.status_code != 200:
-                    # Si la URL falló, no la añadimos a visitados para reintentar después
                     if resp is None:
                         print(f"    ⚠️ Sin respuesta para {url[:60]}")
                     continue
@@ -113,7 +116,6 @@ class Rastreador:
 
             except Exception as e:
                 print(f"    ⚠️ No se pudo leer: {type(e).__name__}")
-                # Si es un error de conexión, esperar un poco antes de continuar
                 if "Connection" in str(e) or "timeout" in str(e).lower():
                     time.sleep(1)
                 continue
@@ -124,4 +126,5 @@ class Rastreador:
             print(f"\n✅ RASTREO FINALIZADO")
         print(f"   Páginas y archivos visitados: {len(self.visitados)}")
         print(f"   URLs pendientes en cola: {len(self.cola)}")
-        print(f"   Hallazgos guardados en: hallazgos.txt")
+        print(f"   Hallazgos guardados en: {config.HALLAZGOS_FILE}")
+        print(f"   Insights blockchain en: {config.BLOCKCHAIN_INSIGHTS_FILE}")
