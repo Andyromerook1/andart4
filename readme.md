@@ -65,7 +65,8 @@ git clone https://github.com/Andyromerook1/andart4.git
 
 # 5. Entrar a la carpeta
 cd andart4
-
+dar permiso de almacenamiento
+termux-setup-storage
 ```
 
 ---
