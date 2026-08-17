@@ -1,5 +1,6 @@
 # config.py
 # Configuración centralizada para el rastreador Andart
+import os
 
 # Red y evasión
 USE_TOR = False                 # Activar/desactivar Tor globalmente
@@ -40,11 +41,20 @@ MAX_CALLS_PER_DAY = 100000      # 100,000 llamadas por día (Free Plan)
 # Activar análisis blockchain automático
 AUTO_BLOCKCHAIN_ANALYSIS = True  # Si False, solo guarda la dirección sin consultar
 
-# Ruta para guardar insights de blockchain
-BLOCKCHAIN_INSIGHTS_FILE = "blockchain_insights.txt"
-
 # =====================================================
 # CONFIGURACIÓN DE DETECCIÓN DE PHISHING Y ANÁLISIS JS
 # =====================================================
 ENABLE_PHISHING_DETECTION = True   # Detectar dominios clonados
 ENABLE_JS_ANALYSIS = True          # Analizar archivos JavaScript para extraer endpoints y tokens
+
+# =====================================================
+# RUTAS DE SALIDA (accesibles desde el explorador de archivos)
+# =====================================================
+# Usamos ~/storage/downloads/ que se habilita con termux-setup-storage
+OUTPUT_BASE = os.path.expanduser("~/storage/downloads/andart_output")
+HALLAZGOS_FILE = os.path.join(OUTPUT_BASE, "hallazgos.txt")
+BLOCKCHAIN_INSIGHTS_FILE = os.path.join(OUTPUT_BASE, "blockchain_insights.txt")
+CHECKPOINT_FILE = os.path.join(OUTPUT_BASE, "checkpoint.json")
+
+# Crear el directorio si no existe
+os.makedirs(OUTPUT_BASE, exist_ok=True)
