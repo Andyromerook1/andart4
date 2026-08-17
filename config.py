@@ -1,60 +1,42 @@
 # config.py
-# Configuración centralizada para el rastreador Andart
 import os
 
-# Red y evasión
-USE_TOR = False                 # Activar/desactivar Tor globalmente
-TOR_PROXY = "socks5://127.0.0.1:9050"
-MAX_RETRIES = 3                 # Reintentos ante errores (429, 403, timeouts)
-BACKOFF_FACTOR = 1.5            # Factor de espera exponencial
-JITTER = 0.3                    # Variación aleatoria en la espera (segundos)
-TIMEOUT = 30                    # Timeout de petición en segundos
-VERIFY_SSL = True               # Verificar certificados SSL
+# Red
+MAX_RETRIES = 2
+BACKOFF_FACTOR = 1.5
+TIMEOUT = 15
+VERIFY_SSL = True
 
 # Límites
-DEFAULT_PAGE_LIMIT = 1_000_000  # Límite de páginas (prácticamente ilimitado)
-DEFAULT_IP_LIMIT = 1000         # IPs a escanear por defecto
+DEFAULT_PAGE_LIMIT = 1_000_000
 
-# Puertos a escanear (usado por escaner_red.py)
-COMMON_PORTS = [
-    21, 22, 23, 25, 53, 67, 68, 69, 80, 81, 110, 111, 135, 139,
-    143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 636,
-    993, 995, 1080, 1433, 1434, 1521, 1723, 2049, 2121, 3306,
-    3389, 5060, 5432, 5900, 5901, 6379, 8000, 8080, 8443,
-    8888, 9000, 9200, 9300, 11211, 27017
-]
-
-# Rutas sensibles a probar (se mantiene igual)
-SENSITIVE_PATHS = ["/.env", "/config.json", "/robots.txt", "/sitemap.xml", "/manifest.json"]
+# Rutas públicas (pensadas para ser leídas por crawlers)
+SENSITIVE_PATHS = ["/robots.txt", "/sitemap.xml"]
 
 # =====================================================
 # CONFIGURACIÓN DE BLOCKCHAIN APIS
 # =====================================================
-TRONSCAN_API_KEY = "47f1caa1-dcff-4ac6-90c7-2e8a461ef664"  # Tu API key de Tronscan (Free Plan: 5 calls/s, 100k/day)
-ETHERSCAN_API_KEY = ""          # Si tienes, ponla aquí (Free Plan: 5 calls/s, 100k/day)
-BSCSCAN_API_KEY = ""            # Si tienes, ponla aquí (Free Plan: 5 calls/s, 100k/day)
+TRONSCAN_API_KEY = ""   # ⚠️ VER NOTA ABAJO — rotar esta clave
+ETHERSCAN_API_KEY = ""
+BSCSCAN_API_KEY = ""
 
-# Límites de Tronscan (según tu plan)
-MAX_CALLS_PER_SECOND = 5        # 5 llamadas por segundo (Free Plan)
-MAX_CALLS_PER_DAY = 100000      # 100,000 llamadas por día (Free Plan)
+MAX_CALLS_PER_SECOND = 5
+MAX_CALLS_PER_DAY = 100000
 
-# Activar análisis blockchain automático
-AUTO_BLOCKCHAIN_ANALYSIS = True  # Si False, solo guarda la dirección sin consultar
+AUTO_BLOCKCHAIN_ANALYSIS = True
 
 # =====================================================
-# CONFIGURACIÓN DE DETECCIÓN DE PHISHING Y ANÁLISIS JS
+# DETECCIÓN DE PHISHING Y ANÁLISIS JS
 # =====================================================
-ENABLE_PHISHING_DETECTION = True   # Detectar dominios clonados
-ENABLE_JS_ANALYSIS = True          # Analizar archivos JavaScript para extraer endpoints y tokens
+ENABLE_PHISHING_DETECTION = True
+ENABLE_JS_ANALYSIS = True
 
 # =====================================================
-# RUTAS DE SALIDA (accesibles desde el explorador de archivos)
+# RUTAS DE SALIDA
 # =====================================================
-# Usamos ~/storage/downloads/ que se habilita con termux-setup-storage
 OUTPUT_BASE = os.path.expanduser("~/storage/downloads/andart_output")
 HALLAZGOS_FILE = os.path.join(OUTPUT_BASE, "hallazgos.txt")
 BLOCKCHAIN_INSIGHTS_FILE = os.path.join(OUTPUT_BASE, "blockchain_insights.txt")
 CHECKPOINT_FILE = os.path.join(OUTPUT_BASE, "checkpoint.json")
 
-# Crear el directorio si no existe
 os.makedirs(OUTPUT_BASE, exist_ok=True)
