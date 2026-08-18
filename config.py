@@ -55,6 +55,7 @@ BLOCKCHAIN_INSIGHTS_FILE = os.path.join(OUTPUT_BASE, "blockchain_insights.txt")
 CASOS_PUENTE_FILE = os.path.join(OUTPUT_BASE, "casos_puente.jsonl")
 CORRELACION_FILE = os.path.join(OUTPUT_BASE, "correlaciones.jsonl")
 CORRELACION_INDEX_FILE = os.path.join(OUTPUT_BASE, "indice_correlacion.json")
+BLOQUEADOS_FILE = os.path.join(OUTPUT_BASE, "revision_manual.txt")
 CHECKPOINT_FILE = os.path.join(OUTPUT_BASE, "checkpoint.json")
 
 os.makedirs(OUTPUT_BASE, exist_ok=True)
