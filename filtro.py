@@ -22,8 +22,20 @@ TIPOS_WALLET = (
 CONTEXTO_WALLET = [
     "wallet", "billetera", "cartera", "deposit", "depósito", "enviar", "envío",
     "pay", "pago", "recibir", "transferencia", "usdt", "btc", "eth", "trx",
-    "地址", "钱包", "转账", "充值",  # dirección / billetera / transferir / recargar (chino)
+    "地址", "钱包", "转账", "充值",
     "address", "dirección",
+]
+
+# Mismo mecanismo para cuentas financieras: sin esto, cualquier código de
+# 8 letras mayúsculas (ej: "BLACKLISTED", "DISALLOW" en un robots.txt)
+# pasa la validación de formato de SWIFT/BIC y se reporta como si fuera
+# una cuenta real.
+CONTEXTO_CUENTA_FINANCIERA = [
+    "cbu", "cvu", "clabe", "iban", "swift", "bic", "pix",
+    "cuenta", "banco", "bancaria", "transferencia", "transferir",
+    "deposit", "depósito", "pago", "pagar", "enviar dinero",
+    "account", "bank", "transfer", "payment",
+    "银行", "账户", "转账",  # banco / cuenta / transferir (chino)
 ]
 
 
@@ -58,10 +70,6 @@ class MotorFiltro:
                 print(f"⚠️ Error inicializando JSAnalyzer: {e}")
 
         self.direcciones_fallidas = set()
-
-        # Índice de correlación: identificador → set de orígenes donde apareció.
-        # Persiste entre corridas para detectar al mismo actor en campañas
-        # distintas, incluso si las visitaste en sesiones diferentes.
         self.indice_correlacion = self._cargar_indice_correlacion()
 
     # =============================================================
@@ -112,17 +120,16 @@ class MotorFiltro:
             return self.validar_iban(valor)
         return True
 
-    def _confianza_wallet(self, texto, pos_inicio, pos_fin):
+    def _confianza_por_contexto(self, texto, pos_inicio, pos_fin, palabras_clave):
         """
-        Mira una ventana de ~60 caracteres alrededor del match para ver si
-        hay contexto de pago/wallet cerca. Sin esto, un hash de git o un
-        checksum cualquiera de 40 caracteres hex matchea igual que una
-        dirección ETH real.
+        Genérico: mira una ventana alrededor del match para ver si hay
+        contexto relevante cerca. Se usa tanto para wallets como para
+        cuentas financieras.
         """
         inicio = max(0, pos_inicio - 60)
         fin = min(len(texto), pos_fin + 60)
         ventana = texto[inicio:fin].lower()
-        return "🟢 ALTA" if any(kw in ventana for kw in CONTEXTO_WALLET) else "🟡 MEDIA"
+        return "🟢 ALTA" if any(kw in ventana for kw in palabras_clave) else "🟡 MEDIA"
 
     # =============================================================
     # 🔗 BLOCKCHAIN
@@ -196,12 +203,6 @@ class MotorFiltro:
             print(f"⚠️ Error guardando índice de correlación: {e}")
 
     def _registrar_correlacion(self, tipo, valor, origen):
-        """
-        Si un mismo identificador (email, wallet, CBU, dominio) ya apareció
-        antes en un origen DISTINTO, es señal de que el mismo actor está
-        detrás de varias campañas. Esto es justo lo que un analista OSINT
-        busca manualmente cruzando planillas — acá se arma solo.
-        """
         clave = f"{tipo}:{valor}"
         origenes_previos = self.indice_correlacion.get(clave, set())
 
@@ -252,17 +253,26 @@ class MotorFiltro:
                 es_wallet = nombre in TIPOS_WALLET
                 peligro = "🔴 ALTO"
                 confianza = None
+
                 if es_wallet:
-                    confianza = self._confianza_wallet(texto, match.start(), match.end())
+                    confianza = self._confianza_por_contexto(texto, match.start(), match.end(), CONTEXTO_WALLET)
                     if confianza == "🟡 MEDIA":
-                        peligro = "🟡 MEDIO"  # baja prioridad hasta revisión manual
+                        peligro = "🟡 MEDIO"
+
+                # Cuentas financieras SIN dígito verificador propio (CLABE,
+                # PIX, SWIFT) necesitan contexto para no colarse como ruido.
+                # CBU e IBAN ya se validaron con checksum arriba, pero igual
+                # sumamos la señal de contexto para reforzar la confianza.
+                if es_cuenta_financiera:
+                    confianza = self._confianza_por_contexto(texto, match.start(), match.end(), CONTEXTO_CUENTA_FINANCIERA)
+                    if confianza == "🟡 MEDIA":
+                        peligro = "🟡 MEDIO"
 
                 hallazgo = {"tipo": nombre, "valor": valor, "origen": origen, "peligro": peligro}
                 if confianza:
                     hallazgo["confianza"] = confianza
                 hallazgos.append(hallazgo)
 
-                # Correlación para email, cuenta financiera y wallets
                 if nombre == "Correo Electrónico" or es_cuenta_financiera or es_wallet:
                     self._registrar_correlacion(nombre, valor, origen)
 
