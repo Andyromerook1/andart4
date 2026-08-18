@@ -1,0 +1,26 @@
+{
+  "pagos_y_bancos": [
+    "paypal", "wise", "revolut", "stripe", "venmo", "zelle", "cashapp",
+    "westernunion", "moneygram",
+    "mercadopago", "mercadolibre", "bbva", "santander", "galicia",
+    "bancoprovincia", "bancociudad", "bancomacro", "hsbc", "citibank",
+    "bankofamerica", "chase", "wellsfargo", "caixa", "bradesco", "itau",
+    "afip", "anses", "swift"
+  ],
+  "cripto": [
+    "binance", "coinbase", "tronscan", "metamask", "kraken", "kucoin",
+    "bybit", "okx", "trustwallet", "ledger", "blockchain", "etherscan",
+    "opensea", "uniswap"
+  ],
+  "mensajeria_y_redes": [
+    "whatsapp", "telegram", "instagram", "facebook", "messenger",
+    "signal", "tiktok", "wechat", "line"
+  ],
+  "tecnologia": [
+    "google", "microsoft", "apple", "amazon", "netflix", "outlook",
+    "gmail", "icloud", "office365", "adobe", "dropbox"
+  ],
+  "gobierno": [
+    "gov", "irs", "renaper", "migraciones", "aduana"
+  ]
+}
