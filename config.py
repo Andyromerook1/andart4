@@ -24,6 +24,17 @@ ENABLE_JS_ANALYSIS = True
 
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
+# =====================================================
+# COMPORTAMIENTO DEL RASTREADOR
+# =====================================================
+RESPETAR_ROBOTS_TXT = True         # No visitar rutas que robots.txt prohíbe
+DELAY_MISMO_DOMINIO = 2.0          # Segundos mínimos entre pedidos al MISMO dominio
+DELAY_DOMINIO_DISTINTO = 0.1       # Segundos entre pedidos a dominios distintos
+CHECKPOINT_CADA_N_PAGINAS = 10     # Guarda progreso cada N páginas visitadas
+
+# =====================================================
+# RUTAS DE SALIDA
+# =====================================================
 OUTPUT_BASE = os.path.expanduser("~/storage/downloads/andart_output")
 HALLAZGOS_FILE = os.path.join(OUTPUT_BASE, "hallazgos.txt")
 BLOCKCHAIN_INSIGHTS_FILE = os.path.join(OUTPUT_BASE, "blockchain_insights.txt")
@@ -32,5 +43,7 @@ CORRELACION_FILE = os.path.join(OUTPUT_BASE, "correlaciones.jsonl")
 CORRELACION_INDEX_FILE = os.path.join(OUTPUT_BASE, "indice_correlacion.json")
 BLOQUEADOS_FILE = os.path.join(OUTPUT_BASE, "revision_manual.txt")
 CHECKPOINT_FILE = os.path.join(OUTPUT_BASE, "checkpoint.json")
+REPORTES_DIR = os.path.join(OUTPUT_BASE, "informes_caso")
 
 os.makedirs(OUTPUT_BASE, exist_ok=True)
+os.makedirs(REPORTES_DIR, exist_ok=True)
