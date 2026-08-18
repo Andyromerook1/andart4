@@ -6,9 +6,24 @@ from blockchain_client import BlockchainClient
 from phishing_detector import PhishingDetector
 from js_analyzer import JSAnalyzer
 
-# Tipos que son cuentas financieras tradicionales (no se consultan contra blockchain)
-TIPOS_CUENTA_FINANCIERA = [
-    "CBU/CVU", "CLABE", "IBAN", "PIX", "SWIFT"
+TIPOS_CUENTA_FINANCIERA = ["CBU/CVU", "CLABE", "IBAN", "PIX", "SWIFT"]
+
+TIPOS_WALLET = (
+    "Bitcoin (Legacy)", "Bitcoin (Native SegWit)", "Bitcoin (Taproot)",
+    "Ethereum / EVM (Polygon, BNB, Arbitrum, etc.)", "Solana (SOL)",
+    "Cardano (ADA)", "Ripple (XRP)", "Tron (TRX)", "Litecoin (Legacy)",
+    "Litecoin (Native SegWit)", "Dogecoin", "Dash", "Monero",
+    "Zcash (Transparent)", "Zcash (Shielded)", "Stellar (XLM)",
+    "Tezos (XTZ)", "Cosmos (ATOM)", "Polkadot (DOT)", "Dirección Cripto (JS)"
+)
+
+# Palabras que, cerca de una posible dirección cripto, aumentan la confianza
+# de que es una wallet real de pago y no un hash/string random.
+CONTEXTO_WALLET = [
+    "wallet", "billetera", "cartera", "deposit", "depósito", "enviar", "envío",
+    "pay", "pago", "recibir", "transferencia", "usdt", "btc", "eth", "trx",
+    "地址", "钱包", "转账", "充值",  # dirección / billetera / transferir / recargar (chino)
+    "address", "dirección",
 ]
 
 
@@ -44,6 +59,11 @@ class MotorFiltro:
 
         self.direcciones_fallidas = set()
 
+        # Índice de correlación: identificador → set de orígenes donde apareció.
+        # Persiste entre corridas para detectar al mismo actor en campañas
+        # distintas, incluso si las visitaste en sesiones diferentes.
+        self.indice_correlacion = self._cargar_indice_correlacion()
+
     # =============================================================
     # 🧹 RUIDO / VALIDACIÓN
     # =============================================================
@@ -58,13 +78,6 @@ class MotorFiltro:
 
     @staticmethod
     def validar_cbu(cbu: str) -> bool:
-        """
-        Valida CBU/CVU argentino (22 dígitos) con su algoritmo real de
-        dígito verificador, para descartar los 21+ dígitos random que
-        matchean el regex pero no son una cuenta real.
-        Estructura: 3 (entidad) + 1 (DV entidad) + 3 (sucursal) + 1 (DV sucursal)
-                    + 13 (cuenta) + 1 (DV cuenta)
-        """
         cbu = re.sub(r'\D', '', cbu)
         if len(cbu) != 22:
             return False
@@ -74,32 +87,19 @@ class MotorFiltro:
             resto = suma % 10
             return 0 if resto == 0 else 10 - resto
 
-        # Primer bloque: entidad(3) + sucursal(3) + DV(1) = 8 dígitos, pesos 7-1-3-9-7-1-3
-        bloque1 = cbu[0:7]
-        dv1_esperado = int(cbu[7])
-        pesos1 = [7, 1, 3, 9, 7, 1, 3]
-        if _dv(bloque1, pesos1) != dv1_esperado:
+        if _dv(cbu[0:7], [7, 1, 3, 9, 7, 1, 3]) != int(cbu[7]):
             return False
-
-        # Segundo bloque: cuenta(13) + DV(1) = 14 dígitos, pesos 3-9-7-1-3-9-7-1-3-9-7-1-3
-        bloque2 = cbu[8:21]
-        dv2_esperado = int(cbu[21])
-        pesos2 = [3, 9, 7, 1, 3, 9, 7, 1, 3, 9, 7, 1, 3]
-        if _dv(bloque2, pesos2) != dv2_esperado:
+        if _dv(cbu[8:21], [3, 9, 7, 1, 3, 9, 7, 1, 3, 9, 7, 1, 3]) != int(cbu[21]):
             return False
-
         return True
 
     @staticmethod
     def validar_iban(iban: str) -> bool:
-        """Valida IBAN con el algoritmo mod-97 estándar (ISO 7064)."""
         iban = iban.replace(" ", "").upper()
         if len(iban) < 15 or len(iban) > 34:
             return False
         reordenado = iban[4:] + iban[:4]
-        convertido = ""
-        for ch in reordenado:
-            convertido += str(int(ch, 36)) if ch.isalpha() else ch
+        convertido = "".join(str(int(ch, 36)) if ch.isalpha() else ch for ch in reordenado)
         try:
             return int(convertido) % 97 == 1
         except ValueError:
@@ -110,8 +110,19 @@ class MotorFiltro:
             return self.validar_cbu(valor)
         if "IBAN" in nombre:
             return self.validar_iban(valor)
-        # CLABE, PIX, SWIFT: por ahora solo validación de formato (ya la hace el regex)
         return True
+
+    def _confianza_wallet(self, texto, pos_inicio, pos_fin):
+        """
+        Mira una ventana de ~60 caracteres alrededor del match para ver si
+        hay contexto de pago/wallet cerca. Sin esto, un hash de git o un
+        checksum cualquiera de 40 caracteres hex matchea igual que una
+        dirección ETH real.
+        """
+        inicio = max(0, pos_inicio - 60)
+        fin = min(len(texto), pos_fin + 60)
+        ventana = texto[inicio:fin].lower()
+        return "🟢 ALTA" if any(kw in ventana for kw in CONTEXTO_WALLET) else "🟡 MEDIA"
 
     # =============================================================
     # 🔗 BLOCKCHAIN
@@ -166,13 +177,63 @@ class MotorFiltro:
         return None
 
     # =============================================================
+    # 🕸️ CORRELACIÓN (vínculos entre campañas)
+    # =============================================================
+    def _cargar_indice_correlacion(self):
+        try:
+            with open(config.CORRELACION_INDEX_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+                return {k: set(v) for k, v in data.items()}
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _guardar_indice_correlacion(self):
+        try:
+            serializable = {k: list(v) for k, v in self.indice_correlacion.items()}
+            with open(config.CORRELACION_INDEX_FILE, "w", encoding="utf-8") as f:
+                json.dump(serializable, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"⚠️ Error guardando índice de correlación: {e}")
+
+    def _registrar_correlacion(self, tipo, valor, origen):
+        """
+        Si un mismo identificador (email, wallet, CBU, dominio) ya apareció
+        antes en un origen DISTINTO, es señal de que el mismo actor está
+        detrás de varias campañas. Esto es justo lo que un analista OSINT
+        busca manualmente cruzando planillas — acá se arma solo.
+        """
+        clave = f"{tipo}:{valor}"
+        origenes_previos = self.indice_correlacion.get(clave, set())
+
+        if origen not in origenes_previos and origenes_previos:
+            caso = {
+                "tipo": tipo,
+                "valor": valor,
+                "origenes": list(origenes_previos) + [origen],
+                "cantidad_apariciones": len(origenes_previos) + 1,
+            }
+            self._guardar_correlacion(caso)
+            print(f"   🕸️ CORRELACIÓN: {tipo} '{valor[:40]}' reaparece en {caso['cantidad_apariciones']} orígenes distintos")
+
+        origenes_previos.add(origen)
+        self.indice_correlacion[clave] = origenes_previos
+        self._guardar_indice_correlacion()
+
+    @staticmethod
+    def _guardar_correlacion(caso):
+        try:
+            with open(config.CORRELACION_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(caso, ensure_ascii=False) + "\n")
+        except Exception as e:
+            print(f"   ⚠️ Error guardando correlación: {e}")
+
+    # =============================================================
     # 🔍 ESCANEO PRINCIPAL
     # =============================================================
     def escanear_texto(self, texto, origen="desconocido"):
         hallazgos = []
         ya_encontrado = set()
 
-        # --- 1. Patrones: email, cuentas financieras, cripto ---
         for nombre, regex in self.patrones.items():
             for match in regex.finditer(texto):
                 valor = match.group(0).strip()
@@ -181,15 +242,29 @@ class MotorFiltro:
 
                 es_cuenta_financiera = any(t in nombre for t in TIPOS_CUENTA_FINANCIERA)
                 if es_cuenta_financiera and not self._es_cuenta_financiera_valida(nombre, valor):
-                    continue  # descarta CBU/IBAN con dígito verificador inválido
+                    continue
 
                 clave_unica = f"{nombre}:{valor[:80]}"
                 if clave_unica in ya_encontrado:
                     continue
                 ya_encontrado.add(clave_unica)
 
-                hallazgo = {"tipo": nombre, "valor": valor, "origen": origen, "peligro": "🔴 ALTO"}
+                es_wallet = nombre in TIPOS_WALLET
+                peligro = "🔴 ALTO"
+                confianza = None
+                if es_wallet:
+                    confianza = self._confianza_wallet(texto, match.start(), match.end())
+                    if confianza == "🟡 MEDIA":
+                        peligro = "🟡 MEDIO"  # baja prioridad hasta revisión manual
+
+                hallazgo = {"tipo": nombre, "valor": valor, "origen": origen, "peligro": peligro}
+                if confianza:
+                    hallazgo["confianza"] = confianza
                 hallazgos.append(hallazgo)
+
+                # Correlación para email, cuenta financiera y wallets
+                if nombre == "Correo Electrónico" or es_cuenta_financiera or es_wallet:
+                    self._registrar_correlacion(nombre, valor, origen)
 
                 if nombre != "Correo Electrónico" and not es_cuenta_financiera:
                     blockchain = self._detectar_blockchain(valor)
@@ -203,7 +278,6 @@ class MotorFiltro:
                             except Exception as e:
                                 print(f"   ⚠️ Error guardando insight blockchain: {e}")
 
-        # --- 2. Dominios clonados (phishing) ---
         if config.ENABLE_PHISHING_DETECTION and self.phishing_detector:
             for url in re.findall(r'https?://[^\s<>"\']+', texto):
                 try:
@@ -214,11 +288,11 @@ class MotorFiltro:
                              "peligro": "🔴 ALTO", "detalles": f"Clon de {legitimo} (similitud: {similitud:.2%})"}
                         hallazgos.append(h)
                         self.guardar_hallazgo(h)
+                        self._registrar_correlacion("Dominio Clonado", dominio, origen)
                         print(f"   🚨 DOMINIO CLONADO: {dominio} → imita a {legitimo}")
                 except Exception:
                     pass
 
-        # --- 3. Análisis JS: endpoints + direcciones cripto ---
         if config.ENABLE_JS_ANALYSIS and self.js_analyzer:
             if origen.endswith('.js') or ('function' in texto and 'var' in texto and '=' in texto):
                 resultados_js = self.js_analyzer.analizar_js(texto, origen)
@@ -232,6 +306,7 @@ class MotorFiltro:
                         h = {"tipo": "Dirección Cripto (JS)", "valor": addr, "origen": origen, "peligro": "🔴 ALTO"}
                         hallazgos.append(h)
                         self.guardar_hallazgo(h)
+                        self._registrar_correlacion("Dirección Cripto (JS)", addr, origen)
                         blockchain = self._detectar_blockchain(addr)
                         if blockchain:
                             enriquecido = self._enriquecer_direccion(addr, blockchain)
@@ -242,32 +317,14 @@ class MotorFiltro:
                                 except Exception as e:
                                     print(f"   ⚠️ Error guardando insight blockchain: {e}")
 
-        # --- 4. PUENTE: cuenta financiera + wallet en el mismo origen ---
         self._detectar_puente(hallazgos, origen)
-
         return hallazgos
 
     def _detectar_puente(self, hallazgos, origen):
-        """
-        Si en el mismo origen aparecen una cuenta financiera (CBU/IBAN/etc.)
-        Y una dirección cripto, arma un 'caso puente': la pista con dueño
-        real (cuenta bancaria) conectada con el destino final del lavado.
-        Esto es lo más accionable para un reporte a la policía/fiscalía.
-        """
         cuentas = [h for h in hallazgos if any(t in h["tipo"] for t in TIPOS_CUENTA_FINANCIERA)]
-        wallets = [h for h in hallazgos if h["tipo"] in (
-            "Bitcoin (Legacy)", "Bitcoin (Native SegWit)", "Bitcoin (Taproot)",
-            "Ethereum / EVM (Polygon, BNB, Arbitrum, etc.)", "Solana (SOL)",
-            "Cardano (ADA)", "Ripple (XRP)", "Tron (TRX)", "Litecoin (Legacy)",
-            "Litecoin (Native SegWit)", "Dogecoin", "Dash", "Monero",
-            "Zcash (Transparent)", "Zcash (Shielded)", "Stellar (XLM)",
-            "Tezos (XTZ)", "Cosmos (ATOM)", "Polkadot (DOT)",
-            "Dirección Cripto (JS)"
-        )]
-
+        wallets = [h for h in hallazgos if h["tipo"] in TIPOS_WALLET]
         if not cuentas or not wallets:
             return
-
         for cuenta in cuentas:
             for wallet in wallets:
                 caso = {
@@ -288,7 +345,8 @@ class MotorFiltro:
 
     def guardar_hallazgo(self, hallazgo):
         detalles = hallazgo.get('detalles', '')
-        linea = f"{hallazgo['peligro']} | [{hallazgo['tipo']}] {hallazgo['valor']} → {hallazgo['origen']}"
+        confianza = f" (Confianza: {hallazgo['confianza']})" if 'confianza' in hallazgo else ""
+        linea = f"{hallazgo['peligro']} | [{hallazgo['tipo']}] {hallazgo['valor']} → {hallazgo['origen']}{confianza}"
         if detalles:
             linea += f" (Detalles: {detalles})"
         linea += "\n"
