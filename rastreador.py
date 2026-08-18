@@ -2,7 +2,9 @@
 import signal
 import sys
 import time
+import json
 from urllib.parse import urlparse, urljoin
+from urllib.robotparser import RobotFileParser
 from bs4 import BeautifulSoup
 from filtro import MotorFiltro
 from network_client import SecureRequester
@@ -31,18 +33,115 @@ class Rastreador:
         self.wayback = WaybackClient()
         self.pdf_extractor = PDFMetadataExtractor()
 
-        self.rutas_publicas = config.SENSITIVE_PATHS  # robots.txt, sitemap.xml, etc.
+        self.rutas_publicas = config.SENSITIVE_PATHS
+
+        # --- robots.txt: un parser cacheado por dominio ---
+        self._robots_cache = {}
+
+        # --- rate limit por dominio: último acceso por dominio ---
+        self._ultimo_acceso_dominio = {}
 
         signal.signal(signal.SIGINT, self._manejador_ctrl_c)
 
     def _manejador_ctrl_c(self, sig, frame):
         print("\n\n⚠️ Deteniendo rastreo (Ctrl+C)... Guardando progreso...")
         self.detener = True
+        self._guardar_checkpoint()
         self._guardar_bloqueados()
         sys.exit(0)
 
     def es_mismo_dominio(self, base, url):
         return True
+
+    # =============================================================
+    # 🤖 ROBOTS.TXT
+    # =============================================================
+    def _permitido_por_robots(self, url):
+        if not config.RESPETAR_ROBOTS_TXT:
+            return True
+        try:
+            parsed = urlparse(url)
+            dominio = f"{parsed.scheme}://{parsed.netloc}"
+            if dominio not in self._robots_cache:
+                rp = RobotFileParser()
+                rp.set_url(f"{dominio}/robots.txt")
+                try:
+                    texto = self.requester.get_text(f"{dominio}/robots.txt")
+                    if texto:
+                        rp.parse(texto.splitlines())
+                    else:
+                        rp = None  # sin robots.txt accesible → se permite por defecto
+                except Exception:
+                    rp = None
+                self._robots_cache[dominio] = rp
+
+            rp = self._robots_cache[dominio]
+            if rp is None:
+                return True
+            return rp.can_fetch("*", url)
+        except Exception:
+            return True  # ante la duda, no bloquea el rastreo por un error de parseo
+
+    # =============================================================
+    # ⏱️ RATE LIMIT POR DOMINIO
+    # =============================================================
+    def _esperar_turno(self, url):
+        dominio = urlparse(url).netloc
+        ahora = time.time()
+        ultimo = self._ultimo_acceso_dominio.get(dominio)
+
+        if ultimo is not None:
+            transcurrido = ahora - ultimo
+            espera_necesaria = config.DELAY_MISMO_DOMINIO - transcurrido
+            if espera_necesaria > 0:
+                time.sleep(espera_necesaria)
+        else:
+            time.sleep(config.DELAY_DOMINIO_DISTINTO)
+
+        self._ultimo_acceso_dominio[dominio] = time.time()
+
+    # =============================================================
+    # 💾 CHECKPOINT / RESUME
+    # =============================================================
+    def _guardar_checkpoint(self):
+        try:
+            data = {
+                "cola": self.cola,
+                "visitados": list(self.visitados),
+                "bloqueados": self.bloqueados,
+                "limite": self.limite,
+            }
+            with open(config.CHECKPOINT_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"   ⚠️ Error guardando checkpoint: {e}")
+
+    @staticmethod
+    def _hay_checkpoint():
+        import os
+        return os.path.exists(config.CHECKPOINT_FILE) and os.path.getsize(config.CHECKPOINT_FILE) > 0
+
+    def _cargar_checkpoint(self):
+        try:
+            with open(config.CHECKPOINT_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            self.cola = data.get("cola", self.cola)
+            self.visitados = set(data.get("visitados", []))
+            self.bloqueados = data.get("bloqueados", [])
+            print(f"   ♻️  Checkpoint cargado: {len(self.visitados)} páginas ya visitadas, "
+                  f"{len(self.cola)} en cola")
+            return True
+        except Exception as e:
+            print(f"   ⚠️ No se pudo cargar el checkpoint: {e}")
+            return False
+
+    def _borrar_checkpoint(self):
+        import os
+        try:
+            if os.path.exists(config.CHECKPOINT_FILE):
+                os.remove(config.CHECKPOINT_FILE)
+        except Exception:
+            pass
 
     def extraer_enlaces(self, url, html_o_texto):
         enlaces = []
@@ -69,12 +168,6 @@ class Rastreador:
                 self.cola.append(url_publica)
 
     def _intentar_wayback(self, url):
-        """
-        Si el sitio bloquea el acceso directo, se intenta UNA vez recuperar
-        la última copia archivada públicamente en Wayback Machine, en vez
-        de reintentar disfrazando la petición. Si tampoco hay copia, se
-        deja la URL para revisión manual.
-        """
         snapshot = self.wayback.snapshot_mas_reciente(url)
         if not snapshot:
             return None
@@ -82,11 +175,6 @@ class Rastreador:
         return self.requester.get(snapshot)
 
     def _procesar_pdf(self, url, resp):
-        """
-        Los PDFs no se pasan por el filtro de texto normal (son binarios).
-        Se les extrae metadata (autor, software, fechas) que puede
-        correlacionar con otras campañas del mismo actor.
-        """
         meta = self.pdf_extractor.extraer(resp.content, origen=url)
         if not meta:
             return
@@ -109,32 +197,43 @@ class Rastreador:
                 for url in self.bloqueados:
                     f.write(url + "\n")
             print(f"   🔒 {len(self.bloqueados)} URLs sin acceso guardadas en: {config.BLOQUEADOS_FILE}")
-            print(f"      → Revisalas manualmente en el navegador cuando quieras")
         except Exception as e:
             print(f"   ⚠️ Error guardando bloqueados: {e}")
 
     def iniciar(self):
-        print(f"🔄 INICIANDO RASTREO — {len(self.cola)} semillas cargadas")
+        if self._hay_checkpoint():
+            resp = input("♻️  Hay un rastreo anterior sin terminar. ¿Retomarlo? (s/n): ").strip().lower()
+            if resp == "s":
+                self._cargar_checkpoint()
+            else:
+                self._borrar_checkpoint()
+
+        print(f"🔄 INICIANDO RASTREO — {len(self.cola)} semillas en cola")
         print(f"   📄 Límite de páginas: {self.limite}")
-        print(f"   🔄 Reintentos máximos: {self.requester.max_retries}")
+        print(f"   🤖 Respeta robots.txt: {config.RESPETAR_ROBOTS_TXT}")
         print(f"   📁 Archivos guardados en: {config.OUTPUT_BASE}")
         print("   💡 Presiona Ctrl+C para detener en cualquier momento\n")
 
         for semilla in list(self.cola):
             self.agregar_rutas_publicas(semilla)
 
+        paginas_desde_checkpoint = 0
+
         while self.cola and len(self.visitados) < self.limite and not self.detener:
             url = self.cola.pop(0)
             if url in self.visitados:
                 continue
 
+            if not self._permitido_por_robots(url):
+                print(f"    🤖 robots.txt prohíbe esta ruta, se omite: {url[:70]}")
+                continue
+
             print(f"🔍 [{len(self.visitados)+1}/{self.limite}] Leyendo: {url[:80]}")
             try:
+                self._esperar_turno(url)
                 resp = self.requester.get(url)
 
                 if resp is None or resp.status_code != 200:
-                    # No se pudo acceder directo — se prueba una copia
-                    # archivada pública antes de darlo por perdido.
                     resp = self._intentar_wayback(url)
                     if resp is None or resp.status_code != 200:
                         self.bloqueados.append(url)
@@ -143,23 +242,23 @@ class Rastreador:
 
                 self.visitados.add(url)
 
-                # PDFs: se procesan aparte (metadata), no como texto/HTML
                 content_type = resp.headers.get("Content-Type", "")
                 if url.lower().endswith(".pdf") or "application/pdf" in content_type:
                     self._procesar_pdf(url, resp)
-                    time.sleep(0.1)
-                    continue
+                else:
+                    hallazgos = self.filtro.escanear_texto(resp.text, origen=url)
+                    for h in hallazgos:
+                        self.filtro.guardar_hallazgo(h)
 
-                hallazgos = self.filtro.escanear_texto(resp.text, origen=url)
-                for h in hallazgos:
-                    self.filtro.guardar_hallazgo(h)
+                    nuevos = self.extraer_enlaces(url, resp.text)
+                    for enlace in nuevos:
+                        if enlace not in self.visitados and enlace not in self.cola:
+                            self.cola.append(enlace)
 
-                nuevos = self.extraer_enlaces(url, resp.text)
-                for enlace in nuevos:
-                    if enlace not in self.visitados and enlace not in self.cola:
-                        self.cola.append(enlace)
-
-                time.sleep(0.1)
+                paginas_desde_checkpoint += 1
+                if paginas_desde_checkpoint >= config.CHECKPOINT_CADA_N_PAGINAS:
+                    self._guardar_checkpoint()
+                    paginas_desde_checkpoint = 0
 
             except Exception as e:
                 print(f"    ⚠️ No se pudo leer: {type(e).__name__}")
@@ -169,8 +268,13 @@ class Rastreador:
 
         if self.detener:
             print("\n🛑 Rastreo detenido por el usuario.")
+        elif len(self.visitados) >= self.limite:
+            self._guardar_checkpoint()
+            print(f"\n✅ LÍMITE ALCANZADO — hay más URLs en cola, checkpoint guardado")
         else:
-            print(f"\n✅ RASTREO FINALIZADO")
+            self._borrar_checkpoint()
+            print(f"\n✅ RASTREO FINALIZADO — sin más URLs por visitar")
+
         print(f"   Páginas visitadas: {len(self.visitados)}")
         print(f"   Hallazgos guardados en: {config.HALLAZGOS_FILE}")
         print(f"   Insights blockchain en: {config.BLOCKCHAIN_INSIGHTS_FILE}")
