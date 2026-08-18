@@ -1,161 +1,176 @@
-**ANDY TECHNOLOGY SYSTEMS**
+# 🕵️ ANDART — Rastreador OSINT de Phishing, Estafas y Lavado de Cripto
 
-🤖 **BOT RASTREADOR AUTÓNOMO — ANDART v4**
-
-🔍 **Reconocimiento Automático desde Fuentes Públicas + Evasión WAF + Panel en Vivo**
-
----
-
-⚠️ **AVISO LEGAL Y DESLINDE DE RESPONSABILIDAD**
-
-🎯 **FINES EXCLUSIVAMENTE EDUCATIVOS:** Esta herramienta ha sido desarrollada únicamente para demostrar cómo funcionan los sistemas de rastreo automatizado utilizados en reconocimiento de fuentes públicas.
-⚖️ **USO RESPONSABLE:** El escaneo de redes, rangos IP o propiedades ajenas sin autorización escrita expresa constituye un delito informático. Esta herramienta no debe ser utilizada contra objetivos que no sean de tu propiedad o sobre los que no cuentes con permiso formal.
-📜 **LIMITACIÓN DE DISEÑO:** El módulo de rastreo web consulta únicamente APIs públicas y contenido accesible por cualquier navegador sin autenticación. No realiza ataques, inyecciones ni intentos de explotar vulnerabilidades.
+Herramienta de código abierto para detectar sitios de phishing, campañas de
+estafa (incluido spam de apuestas ilegales) y trazar el flujo de fondos
+—tanto en cuentas financieras tradicionales como en criptomonedas— a partir
+de **fuentes públicas**.
 
 ---
 
-✅ **¿CÓMO FUNCIONA?**
+## ⚠️ Aviso legal y alcance
 
-El bot se alimenta solo al encenderse, sin que tengas que escribir ninguna dirección manualmente:
-
-* 🔗 **GitHub API:** Trae repositorios creados o actualizados recientemente.
-* 📚 **Wikipedia API:** Trae artículos al azar como semillas de navegación.
-* 📂 **Archivo local:** Si existe `semillas.txt`, carga URLs adicionales automáticamente.
-* 🌐 **Generador automático de rangos IP:** Crea direcciones al azar para el módulo de red.
-
-**Flujo completo:**
-Descubre enlaces ➔ Pasa por el cliente con evasión WAF/Tor ➔ Lee páginas ➔ Filtra por patrones ➔ Guarda hallazgos en `hallazgos.txt` ➔ Se muestran en vivo en el panel web.
+- **Fuentes públicas únicamente.** El bot solo lee contenido accesible sin
+  autenticación (páginas web, repos públicos de GitHub, exploradores de
+  blockchain públicos) y consulta APIs oficiales dentro de sus límites
+  publicados.
+- **No escanea redes ni rangos de IP.** No hace port scanning, no intenta
+  acceder a sistemas ajenos, no explota vulnerabilidades.
+- **No cosecha credenciales.** No busca ni guarda claves de API, contraseñas
+  ni tokens de terceros — solo indicadores de estafa: dominios clonados,
+  direcciones de criptomonedas y cuentas financieras (CBU/CVU, IBAN, etc.)
+  que el propio estafador publica para que la víctima le pague.
+- **Los hallazgos pueden incluir datos personales reales** (ej. una cuenta
+  bancaria vinculada a una identidad). Tratalos con cuidado: no los subas a
+  ningún repo público ni los compartas fuera del canal correspondiente
+  (policía / fiscalía).
+- Esta herramienta no reemplaza asesoramiento legal. Si vas a presentar
+  hallazgos ante una autoridad, consultá cómo documentar la cadena de
+  custodia para que sean válidos como evidencia.
 
 ---
 
-📁 **ESTRUCTURA DEL PROYECTO**
+## 📁 Estructura del proyecto
 
 ```text
 andart4/
- ├─ app.py              ← Menú principal y coordinación
- ├─ servidor.py         ← Panel web en tiempo real ✅
- ├─ network_client.py   ← Cliente de red con Evasión WAF + Tor ✅
- ├─ fuentes.py          ← Obtención automática de semillas desde APIs
- ├─ rastreador.py       ← Navegación automática usando network_client
- ├─ filtro.py           ← Búsqueda por patrones RegEx definidos
- ├─ escaner_red.py      ← Escaneo de rangos IP y detección de puertos abiertos
- ├─ patrones.json       ← Moldes de búsqueda (claves, tokens, correos...)
- └─ README.md           ← Esta guía
-
+ ├─ app.py                 ← Menú principal
+ ├─ servidor.py            ← Panel web en vivo
+ ├─ network_client.py      ← Cliente HTTP (rotación de User-Agent, reintentos)
+ ├─ fuentes.py             ← Semillas: dorks, feeds de threat intel, sitios de investigación
+ ├─ rastreador.py          ← Recorre las semillas y sigue enlaces
+ ├─ filtro.py              ← Motor de detección (patrones + phishing + JS + puente)
+ ├─ patrones.json          ← Reglas: email, cuentas financieras, direcciones cripto
+ ├─ phishing_detector.py   ← Detección de dominios clonados (typosquatting)
+ ├─ js_analyzer.py         ← Extrae endpoints y direcciones cripto de archivos JS
+ ├─ blockchain_client.py   ← Consulta Tronscan/Etherscan/BscScan + heurística de lavado
+ ├─ github_hunter.py       ← Caza de repos de spam en GitHub (Search API oficial)
+ ├─ config.py              ← Configuración centralizada
+ └─ README.md              ← Esta guía
 ```
 
 ---
 
-🚀 **INSTALACIÓN EN TERMUX**
-
-Abrí Termux y ejecutá paso a paso:
+## 🚀 Instalación en Termux
 
 ```bash
 # 1. Actualizar sistema
 pkg update && pkg upgrade -y
 
-# 2. Instalar dependencias del sistema (incluye Tor y librerías C/FFI)
-pkg install python git cloudflared tor libffi openssl -y
+# 2. Instalar dependencias del sistema
+pkg install python git -y
 
 # 3. Instalar librerías de Python
-pip install requests beautifulsoup4 flask pysocks curl_cffi
+pip install requests beautifulsoup4 flask
 
 # 4. Clonar el repositorio
 git clone https://github.com/Andyromerook1/andart4.git
-
-# 5. Entrar a la carpeta
 cd andart4
-dar permiso de almacenamiento
+
+# 5. Dar permiso de almacenamiento (para guardar los hallazgos en Descargas)
 termux-setup-storage
 ```
 
----
 
-▶️ **EJECUCIÓN — INSTRUCCIONES COMPLETAS**
+## ▶️ Ejecución
 
-🔹 **Opción recomendada: 2 Terminales en Termux**
+### Opción recomendada: 2 terminales en Termux
 
-Deslizá el dedo desde el borde izquierdo de la pantalla para abrir una segunda sesión y dejá las dos funcionando al mismo tiempo:
+Deslizá el dedo desde el borde izquierdo de la pantalla para abrir una
+segunda sesión y dejá las dos corriendo al mismo tiempo.
 
-🟢 **Terminal 1 — El bot trabaja y busca:**
-
-*(Opcional: Si querés activar la rotación de IP con Tor, ejecutá `tor &` antes de iniciar el bot)*
+**Terminal 1 — el bot rastrea:**
 
 ```bash
-tor &
 python app.py
-
 ```
 
-Se abrirá el menú. Elegí:
+Se abrirá el menú:
 
-* `1` ➔ **Rastreo web** (APIs automáticas + evasión WAF + búsqueda de claves)
-* `2` ➔ **Escaneo de red** (genera rango IP automáticamente)
-* `3` ➔ **AMBOS al mismo tiempo**
-* `0` ➔ **Salir**
+- `1` ➔ **Rastreo web** — recorre dorks, feeds de threat intel y sitios de
+  investigación en busca de phishing, dominios clonados, cuentas financieras
+  y wallets.
+- `2` ➔ **Caza en GitHub** — busca repos de spam (como campañas de apuestas
+  ilegales en chino) usando la API oficial de búsqueda de GitHub.
+- `0` ➔ Salir.
 
-🔵 **Terminal 2 — Panel web en vivo desde cualquier dispositivo:**
+**Terminal 2 — panel web en vivo:**
 
 ```bash
-python servidor.py &
-cloudflared tunnel --url http://127.0.0.1:5000
-
+python servidor.py
 ```
 
-✅ **Cloudflared** imprimirá en pantalla un enlace público en color verde, por ejemplo: `[https://palabras-aleatorias.trycloudflare.com](https://palabras-aleatorias.trycloudflare.com)`
-Entrá a ese enlace desde tu celular, PC o cualquier navegador del mundo. Verás los hallazgos apareciendo automáticamente cada 5 segundos sin que tengas que recargar la página.
+Abrí `http://127.0.0.1:5000` en el navegador del celular/PC. El panel se
+actualiza solo cada 5 segundos, sin recargar.
 
 ---
 
-🔄 **¿QUÉ OCURRE EN SEGUNDO PLANO?**
+## 🔄 ¿Qué hace el bot en segundo plano?
 
 ```text
-[ENCENDER BOT]
-      ↓
-🌐 (Opcional) Activar demonio Tor en segundo plano (tor &)
-      ↓
-🔗 Consultar GitHub API → trae repositorios nuevos automáticamente
-      ↓
-📚 Consultar Wikipedia API → trae artículos al azar
-      ↓
-📂 Cargar semillas.txt (si existe)
-      ↓
-🌐 Generar rango IP aleatorio
-      ↓
-🛡️ Peticiones HTTP mediante network_client (Spoofing TLS + User-Agents + Jitter)
-      ↓
-🔁 Llenar cola → navegar → descubrir enlaces → filtrar por patrones
-      ↓
-💾 Guardar coincidencias en hallazgos.txt
-      ↓
-📡 Servidor web lee el archivo cada 5 segundos y lo muestra en pantalla
-      ↓
-🌍 Cualquier dispositivo ve los resultados en vivo
-
+[INICIAR]
+   ↓
+📡 Carga semillas: dorks de Google, feeds de threat intel (urlhaus,
+   phishstats, openphish), sitios de investigación, semillas.txt (opcional)
+   ↓
+🌐 Visita cada URL con network_client (rotación de User-Agent normal)
+   ↓
+🔍 filtro.py analiza el contenido:
+     - Dominios clonados (phishing)
+     - Direcciones de criptomonedas → se enriquecen contra blockchain_client
+     - Cuentas financieras (CBU/CVU, IBAN...) → se validan con su dígito verificador
+     - Si aparecen ambas en el mismo origen → se guarda como "caso puente"
+   ↓
+💾 hallazgos.txt / blockchain_insights.txt / casos_puente.jsonl
+   ↓
+📊 servidor.py muestra hallazgos.txt en vivo
 ```
 
 ---
 
-📋 **RESUMEN DE CARACTERÍSTICAS**
+## 📋 Archivos de salida
 
-| Característica | Detalle |
-| --- | --- |
-| **Semillas automáticas** | GitHub + Wikipedia + Archivo local |
-| **Sin escribir URLs** | El bot se alimenta solo al iniciar |
-| **Evasión WAF / TLS** | Rotación de User-Agents, headers realistas y `curl_cffi` |
-| **Soporte Tor** | Rotación de IP mediante proxy SOCKS5 (`127.0.0.1:9050`) |
-| **Búsqueda por patrones** | Claves AWS, tokens, correos, contraseñas, billeteras |
-| **Escaneo de red** | Genera rangos IP automáticamente |
-| **Panel en vivo** | Se actualiza cada 5 segundos |
-| **Acceso remoto** | Cloudflared ➔ enlace público desde cualquier lugar |
-| **Todo guardado** | `hallazgos.txt` persiste todos los resultados |
+Todo se guarda en `~/storage/downloads/andart_output/`:
+
+| Archivo                     | Contenido                                                        |
+|------------------------------|--------------------------------------------------------------------|
+| `hallazgos.txt`             | Todos los hallazgos individuales (dominios, wallets, cuentas, etc.)|
+| `blockchain_insights.txt`   | Balance, volumen y patrones de lavado detectados por wallet        |
+| `casos_puente.jsonl`        | Cuenta financiera + wallet vinculadas en el mismo origen (⚠️ sensible) |
+| `checkpoint.json`           | Progreso del rastreo, si se implementa                             |
+
+`casos_puente.jsonl` es el archivo más sensible: cruza un dato con
+identidad real con el destino final de los fondos. No lo subas a git.
 
 ---
 
-⚠️ **NOTAS IMPORTANTES**
+## 🔒 Antes de subir cambios al repo
 
-* El archivo `hallazgos.txt` se crea automáticamente al primer hallazgo. No necesitas crearlo.
-* El módulo de evasión `network_client.py` gestiona reintentos automáticos (*backoff exponencial*) ante respuestas `429` (Too Many Requests) o `403` (Forbidden).
-* El escaneo de red prueba puertos comunes (`22`, `80`, `443`, `3306`, `5432`, `27017`).
-* Si usás la opción `2` o `3`, el rango IP se genera aleatoriamente en cada ejecución.
-* El enlace de Cloudflared cambia cada vez que reiniciás el túnel.
+Agregá un `.gitignore` con al menos:
+
+```gitignore
+*.env
+hallazgos.txt
+blockchain_insights.txt
+casos_puente.jsonl
+checkpoint.json
+__pycache__/
+*.pyc
+```
+
+Y nunca commitees una API key en `config.py` — siempre por variable de
+entorno.
+
+---
+
+## 🌐 Opcional: acceso remoto al panel
+
+Si además de correrlo en tu celular querés ver el panel desde otro
+dispositivo fuera de tu red:
+
+```bash
+pkg install cloudflared -y
+cloudflared tunnel --url http://127.0.0.1:5000
+```
+
+Te va a dar un link público temporal. Cambia cada vez que reiniciás el
+túnel.
