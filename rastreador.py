@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from filtro import MotorFiltro
 from network_client import SecureRequester
 from wayback_client import WaybackClient
+from pdf_metadata import PDFMetadataExtractor
 import config
 
 
@@ -28,6 +29,7 @@ class Rastreador:
             verify_ssl=config.VERIFY_SSL
         )
         self.wayback = WaybackClient()
+        self.pdf_extractor = PDFMetadataExtractor()
 
         self.rutas_publicas = config.SENSITIVE_PATHS  # robots.txt, sitemap.xml, etc.
 
@@ -79,6 +81,26 @@ class Rastreador:
         print(f"    📦 Recuperando vía Wayback Machine: {snapshot[:70]}")
         return self.requester.get(snapshot)
 
+    def _procesar_pdf(self, url, resp):
+        """
+        Los PDFs no se pasan por el filtro de texto normal (son binarios).
+        Se les extrae metadata (autor, software, fechas) que puede
+        correlacionar con otras campañas del mismo actor.
+        """
+        meta = self.pdf_extractor.extraer(resp.content, origen=url)
+        if not meta:
+            return
+        for campo in ("autor", "creador", "productor"):
+            valor = meta.get(campo)
+            if valor:
+                self.filtro._registrar_correlacion(f"PDF {campo}", valor, url)
+        try:
+            with open(config.HALLAZGOS_FILE, "a", encoding="utf-8") as f:
+                f.write(f"📄 PDF METADATA | {meta} → {url}\n")
+            print(f"   📄 Metadata de PDF extraída: {meta}")
+        except Exception as e:
+            print(f"   ⚠️ Error guardando metadata de PDF: {e}")
+
     def _guardar_bloqueados(self):
         if not self.bloqueados:
             return
@@ -120,6 +142,13 @@ class Rastreador:
                         continue
 
                 self.visitados.add(url)
+
+                # PDFs: se procesan aparte (metadata), no como texto/HTML
+                content_type = resp.headers.get("Content-Type", "")
+                if url.lower().endswith(".pdf") or "application/pdf" in content_type:
+                    self._procesar_pdf(url, resp)
+                    time.sleep(0.1)
+                    continue
 
                 hallazgos = self.filtro.escanear_texto(resp.text, origen=url)
                 for h in hallazgos:
