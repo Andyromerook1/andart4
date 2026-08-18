@@ -68,6 +68,8 @@ cd andart4
 
 # 5. Dar permiso de almacenamiento (para guardar los hallazgos en Descargas)
 termux-setup-storage
+instalar libreria 
+pip install pikepdf
 ```
 
 
