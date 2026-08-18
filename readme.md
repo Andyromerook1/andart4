@@ -143,24 +143,7 @@ identidad real con el destino final de los fondos. No lo subas a git.
 
 ---
 
-## 🔒 Antes de subir cambios al repo
 
-Agregá un `.gitignore` con al menos:
-
-```gitignore
-*.env
-hallazgos.txt
-blockchain_insights.txt
-casos_puente.jsonl
-checkpoint.json
-__pycache__/
-*.pyc
-```
-
-Y nunca commitees una API key en `config.py` — siempre por variable de
-entorno.
-
----
 
 ## 🌐 Opcional: acceso remoto al panel
 
