@@ -1,35 +1,79 @@
-{
-  "Correo Electrónico": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+# fuentes.py
+class FuentesSemillas:
+    def __init__(self):
+        pass
 
-  "===== CUENTAS FINANCIERAS (posibles mulas) =====": "",
-  "CBU/CVU (Argentina)": "\\b\\d{22}\\b",
-  "CLABE (México)": "\\b\\d{18}\\b",
-  "IBAN (Europa/internacional)": "\\b[A-Z]{2}\\d{2}[A-Z0-9]{11,30}\\b",
-  "PIX - Clave aleatoria (Brasil)": "\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b",
-  "PIX - CPF (Brasil, 11 dígitos)": "\\b\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}\\b",
-  "SWIFT/BIC": "\\b[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?\\b",
-  "Usuario Telegram (link)": "t\\.me/[a-zA-Z0-9_]{5,32}",
-  "Usuario Telegram (mención)": "(?<![\\w.])@[a-zA-Z0-9_]{5,32}(?!\\.[a-zA-Z]{2,})",
-  "Número WhatsApp (con código país)": "\\+\\d{1,3}[\\s-]?\\d{2,4}[\\s-]?\\d{3,4}[\\s-]?\\d{3,4}",
+    def obtener_todas(self):
+        print("\n" + "="*70)
+        print("   🕵️‍♂️ CARGANDO SEMILLAS DE CACERÍA — SPAM, PHISHING Y ESTAFAS")
+        print("="*70)
+        urls = []
 
-  "===== CRIPTOMONEDAS =====": "",
-  "Bitcoin (Legacy)": "[13][a-km-zA-HJ-NP-Z1-9]{25,34}",
-  "Bitcoin (Native SegWit)": "bc1q[a-z0-9]{39,59}",
-  "Bitcoin (Taproot)": "bc1p[a-z0-9]{58,62}",
-  "Ethereum / EVM (Polygon, BNB, Arbitrum, etc.)": "0x[a-fA-F0-9]{40}",
-  "Solana (SOL)": "[1-9A-HJ-NP-Za-km-z]{43,44}",
-  "Cardano (ADA)": "addr1[a-z0-9]{58,103}",
-  "Ripple (XRP)": "r[a-zA-Z0-9]{24,34}",
-  "Tron (TRX)": "T[a-zA-Z0-9]{33}",
-  "Litecoin (Legacy)": "[LM][a-km-zA-HJ-NP-Z1-9]{26,33}",
-  "Litecoin (Native SegWit)": "ltc1[a-z0-9]{39,59}",
-  "Dogecoin": "D[a-km-zA-HJ-NP-Z1-9]{25,34}",
-  "Dash": "X[a-km-zA-HJ-NP-Z1-9]{33}",
-  "Monero": "4[0-9AB][1-9A-HJ-NP-Za-km-z]{94}",
-  "Zcash (Transparent)": "t1[a-zA-Z0-9]{33}",
-  "Zcash (Shielded)": "zs[a-zA-Z0-9]{75}",
-  "Stellar (XLM)": "G[A-Z0-9]{55}",
-  "Tezos (XTZ)": "tz[123][a-zA-Z0-9]{33}",
-  "Cosmos (ATOM)": "cosmos1[a-zA-Z0-9]{38}",
-  "Polkadot (DOT)": "[1-9A-HJ-NP-Za-km-z]{47,48}"
-}
+        # NOTA: los dorks de Google (site:github.com, inurl:login, etc.) se
+        # sacaron de acá. Google bloquea pedidos automatizados a /search
+        # (devuelve CAPTCHA), así que no aportaban resultados reales — solo
+        # generaban ruido (ej: terminaba rastreando robots.txt de google.com
+        # porque ESA era la URL semilla). La caza de spam en GitHub ya se
+        # hace mejor con la API oficial en github_hunter.py (opción 2 del menú).
+
+        dorks_phishing_sugeridos = [
+            # Para revisar VOS A MANO en el navegador, no se rastrean automático:
+            'inurl:login intext:"sign in to your account" intext:"verification"',
+            '"connect wallet" intext:"verify" intext:"security"',
+            'site:*.top intext:"login" intext:"microsoft" intext:"office365"',
+            'intitle:"index of" intext:"phishing" OR "login"',
+        ]
+        # (no se agregan a `urls` — son solo referencia, ver README)
+
+        feeds = [
+            "https://urlhaus.abuse.ch/feeds/rss/",
+            "https://phishstats.info/phish_score.csv",
+            "https://openphish.com/feed.txt",
+            "https://raw.githubusercontent.com/mitchellkrogza/Phishing.Database/master/phishing-links.txt",
+            "https://cybercrime-tracker.net/rss.xml",
+            "https://cert.europa.eu/static/SecurityAdvisories/",
+        ]
+        urls.extend(feeds)
+
+        # Sitios de investigación/noticias de seguridad — SÍ se rastrean,
+        # porque publican artículos puntuales sobre estafas reales (no son
+        # sitios "grandes" con miles de páginas internas no relacionadas).
+        sitios_investigacion = [
+            "https://www.ripoffreport.com",
+            "https://www.scamwarners.com",
+            "https://www.antifraud.org",
+            "https://www.scamadviser.com",
+            "https://www.bleepingcomputer.com/news/security/",
+            "https://www.malwarebytes.com/blog/news",
+            "https://www.hackread.com/feed/",
+            "https://www.krebsonsecurity.com",
+            "https://www.cybernews.com",
+            "https://www.threatpost.com",
+            "https://www.zerodayinitiative.com",
+        ]
+        # Se sacaron de esta lista: cryptocompare.com, bitcointalk.org,
+        # haveibeenpwned.com — son sitios de referencia con miles de páginas
+        # internas legítimas (foros, sitemaps). El bot terminaba rastreando
+        # SUS páginas internas y marcándolas como sospechosas por error.
+        # Si querés usarlos como referencia de lectura, visitalos a mano.
+        urls.extend(sitios_investigacion)
+
+        urls_unicas = list(dict.fromkeys(urls))
+        print(f"✅ TOTAL SEMILLAS CARGADAS: {len(urls_unicas)}")
+        print(f"📡 Feeds de amenazas: {len(feeds)}")
+        print(f"🕵️ Sitios de investigación: {len(sitios_investigacion)}")
+        print(f"💡 Dorks sugeridos (revisión manual): {len(dorks_phishing_sugeridos)}")
+        print("="*70)
+        return urls_unicas
+
+    def desde_archivo(self):
+        urls = []
+        try:
+            with open("semillas.txt", encoding="utf-8") as f:
+                for linea in f:
+                    linea = linea.strip()
+                    if linea and not linea.startswith("#"):
+                        urls.append(linea)
+        except FileNotFoundError:
+            pass
+        return urls
