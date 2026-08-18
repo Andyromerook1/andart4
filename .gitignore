@@ -1,0 +1,25 @@
+# Salidas del bot (contienen datos personales reales - CBU, wallets, emails)
+hallazgos.txt
+blockchain_insights.txt
+casos_puente.jsonl
+correlaciones.jsonl
+indice_correlacion.json
+checkpoint.json
+
+# Toda la carpeta de salida por si algún día corre local en vez de storage/
+andart_output/
+
+# Variables de entorno / claves
+*.env
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
