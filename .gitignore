@@ -4,6 +4,7 @@ blockchain_insights.txt
 casos_puente.jsonl
 correlaciones.jsonl
 indice_correlacion.json
+revision_manual.txt
 checkpoint.json
 
 # Toda la carpeta de salida por si algún día corre local en vez de storage/
