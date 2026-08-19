@@ -19,10 +19,28 @@ DOMINIOS_LEGITIMOS = [
     "haveibeenpwned.com"
 ]
 
+# Dominios AUXILIARES legítimos de las mismas empresas (analytics, CDN,
+# etc.) — no son subdominios de la marca principal, son dominios propios
+# distintos. Sin esto, cualquier script de terceros legítimo se marca
+# como "clon" solo por contener el nombre de la marca.
+DOMINIOS_AUXILIARES_LEGITIMOS = {
+    "googletagmanager.com", "google-analytics.com", "googleapis.com",
+    "gstatic.com", "googleusercontent.com", "doubleclick.net",
+    "googlesyndication.com", "googleadservices.com", "ytimg.com",
+    "youtube.com", "gvt1.com", "goo.gl",
+    "fbcdn.net", "facebook.net",
+    "twimg.com", "t.co",
+    "licdn.com",
+    "amazon-adsystem.com", "media-amazon.com", "ssl-images-amazon.com",
+    "akamaihd.net", "cloudfront.net", "cloudflare.com", "jsdelivr.net",
+    "paypalobjects.com",
+}
+
 
 class PhishingDetector:
     def __init__(self, dominios_legitimos=None):
         self.dominios_legitimos = dominios_legitimos or DOMINIOS_LEGITIMOS
+        self.dominios_auxiliares = DOMINIOS_AUXILIARES_LEGITIMOS
         self.patrones = self._compilar_patrones()
 
     def _compilar_patrones(self):
@@ -43,21 +61,19 @@ class PhishingDetector:
                 variaciones.append(base.replace('i', '1'))
             if 's' in base:
                 variaciones.append(base.replace('s', '5'))
-            # Ancla al INICIO del dominio (^) para no matchear subdominios legítimos
             patron = r'^(' + '|'.join(re.escape(v) for v in variaciones) + \
                      r')[a-zA-Z0-9-]*\.(com|net|org|xyz|top|icu|tk|ml|ga|cf|club|online|site|tech|store|info|biz)$'
-            patrones.append((patron and re.compile(patron, re.IGNORECASE), dominio))
+            patrones.append((re.compile(patron, re.IGNORECASE), dominio))
         return patrones
 
     def _es_dominio_o_subdominio_legitimo(self, dominio_limpio):
-        """
-        True si dominio_limpio ES uno de los legítimos, o es un subdominio
-        REAL de uno de ellos (ej: plus.google.com termina en .google.com).
-        Esto es lo que faltaba: sin este chequeo, cualquier subdominio
-        auténtico se compara como si fuera un dominio nuevo sospechoso.
-        """
+        if dominio_limpio in self.dominios_auxiliares:
+            return True
         for legitimo in self.dominios_legitimos:
             if dominio_limpio == legitimo or dominio_limpio.endswith("." + legitimo):
+                return True
+        for aux in self.dominios_auxiliares:
+            if dominio_limpio == aux or dominio_limpio.endswith("." + aux):
                 return True
         return False
 
@@ -68,12 +84,9 @@ class PhishingDetector:
         if dominio_limpio.startswith('www.'):
             dominio_limpio = dominio_limpio[4:]
 
-        # 0. Si es el dominio legítimo o un subdominio REAL de uno legítimo,
-        #    nunca es un clon — corta acá antes de cualquier heurística.
         if self._es_dominio_o_subdominio_legitimo(dominio_limpio):
             return False, None, 1.0
 
-        # 1. TLD sospechoso + similitud alta con un dominio legítimo
         partes = dominio_limpio.split('.')
         if len(partes) >= 2:
             tld = partes[-1]
@@ -92,10 +105,8 @@ class PhishingDetector:
                 if mejor_similitud > 0.85:
                     return True, mejor_match, mejor_similitud
 
-        # 2. Variantes engañosas (rn→m, 0 en vez de o, etc.) SOLO en el
-        #    dominio raíz completo, anclado — no como substring de cualquier lado.
         for patron, dominio_origen in self.patrones:
-            if patron and patron.match(dominio_limpio):
+            if patron.match(dominio_limpio):
                 return True, dominio_origen, 0.9
 
         return False, None, 0.0
