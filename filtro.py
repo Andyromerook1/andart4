@@ -18,15 +18,14 @@ TIPOS_WALLET = (
     "Tezos (XTZ)", "Cosmos (ATOM)", "Polkadot (DOT)", "Dirección Cripto (JS)"
 )
 
-# Tipos con checksum Base58Check verificable matemáticamente. Si el checksum
-# no valida, se descarta directo — no es "poca confianza", es inválido.
-TIPOS_BASE58CHECK = ("Bitcoin (Legacy)", "Litecoin (Legacy)", "Dogecoin", "Dash")
+# Tipos con checksum Base58Check verificable matemáticamente (Tron usa el
+# MISMO algoritmo que Bitcoin: doble SHA-256, 4 bytes de checksum).
+TIPOS_BASE58CHECK = ("Bitcoin (Legacy)", "Litecoin (Legacy)", "Dogecoin", "Dash", "Tron (TRX)")
 
-# Tipos con regex estructuralmente débil (un prefijo corto + rango amplio
-# de caracteres, sin checksum verificable offline). Cualquier hash/base64
-# random del tamaño correcto matchea. Si no hay contexto fuerte (🟢 ALTA),
-# se descartan directo en vez de guardarse como ruido de baja prioridad.
-TIPOS_REGEX_DEBIL = ("Solana (SOL)", "Polkadot (DOT)", "Cosmos (ATOM)")
+# Tipos con regex estructuralmente débil (sin checksum verificable
+# offline). Ripple usa un alfabeto Base58 DISTINTO al de Bitcoin, así que
+# tampoco se puede validar con validar_base58check — va acá también.
+TIPOS_REGEX_DEBIL = ("Solana (SOL)", "Polkadot (DOT)", "Cosmos (ATOM)", "Ripple (XRP)")
 
 CONTEXTO_WALLET = [
     "wallet", "billetera", "cartera", "deposit", "depósito", "enviar", "envío",
@@ -42,6 +41,14 @@ CONTEXTO_CUENTA_FINANCIERA = [
     "account", "bank", "transfer", "payment",
     "银行", "账户", "转账",
 ]
+
+# Palabras reservadas de CSS/JSON-LD/schema.org que el regex de Telegram
+# atrapa por error (empiezan con @ pero no son usuarios).
+DENYLIST_TELEGRAM = {
+    "context", "graph", "type", "media", "keyframes", "supports",
+    "toprimitive", "charset", "import", "page", "namespace", "document",
+    "viewport", "font-face", "value", "id", "container", "scope",
+}
 
 BASE58_ALFABETO = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
@@ -93,14 +100,6 @@ class MotorFiltro:
 
     @staticmethod
     def validar_base58check(direccion: str) -> bool:
-        """
-        Verifica el checksum real (doble SHA-256, últimos 4 bytes) de una
-        dirección Base58Check. Esto es matemático, no heurístico: una
-        dirección real de Bitcoin/Litecoin/Dogecoin/Dash SIEMPRE pasa esto,
-        y basura aleatoria (fragmentos de SVG, base64, hashes de git) falla
-        con probabilidad ~1 en 4 mil millones. Reemplaza cualquier necesidad
-        de "adivinar por contexto" para estos tipos.
-        """
         try:
             if not direccion or any(c not in BASE58_ALFABETO for c in direccion):
                 return False
@@ -241,8 +240,7 @@ class MotorFiltro:
 
         if origen not in origenes_previos and origenes_previos:
             caso = {
-                "tipo": tipo,
-                "valor": valor,
+                "tipo": tipo, "valor": valor,
                 "origenes": list(origenes_previos) + [origen],
                 "cantidad_apariciones": len(origenes_previos) + 1,
             }
@@ -274,12 +272,16 @@ class MotorFiltro:
                 if not valor or len(valor) <= 5 or self.es_ruido_obvio(valor):
                     continue
 
+                # Denylist de Telegram: descarta palabras reservadas de CSS/JSON-LD
+                if "Telegram" in nombre:
+                    usuario = valor.lstrip("@").split("/")[-1].lower()
+                    if usuario in DENYLIST_TELEGRAM:
+                        continue
+
                 es_cuenta_financiera = any(t in nombre for t in TIPOS_CUENTA_FINANCIERA)
                 if es_cuenta_financiera and not self._es_cuenta_financiera_valida(nombre, valor):
                     continue
 
-                # Checksum matemático real: si falla, no es una dirección
-                # válida — se descarta acá, sin llegar ni a "baja confianza".
                 if nombre in TIPOS_BASE58CHECK and not self.validar_base58check(valor):
                     continue
 
@@ -294,13 +296,8 @@ class MotorFiltro:
 
                 if es_wallet:
                     confianza = self._confianza_por_contexto(texto, match.start(), match.end(), CONTEXTO_WALLET)
-
-                    # Tipos con regex débil (sin checksum): sin contexto
-                    # fuerte, se descartan directo — no vale la pena
-                    # guardarlos ni como MEDIO, generan puro volumen.
                     if nombre in TIPOS_REGEX_DEBIL and confianza != "🟢 ALTA":
                         continue
-
                     if confianza == "🟡 MEDIA":
                         peligro = "🟡 MEDIO"
 
@@ -349,10 +346,6 @@ class MotorFiltro:
                 resultados_js = self.js_analyzer.analizar_js(texto, origen)
 
                 for endpoint in resultados_js.get('endpoints', []):
-                    # Filtra el "chrome" propio de Wayback Machine
-                    # (donate.php, account/login.php) que se cuela cuando
-                    # el rastreador recupera una copia archivada — no es
-                    # del sitio investigado, es de la interfaz de archive.org.
                     if not endpoint or "archive.org" in endpoint.lower():
                         continue
                     h = {"tipo": "Endpoint API (JS)", "valor": endpoint, "origen": origen, "peligro": "🟡 MEDIO"}
