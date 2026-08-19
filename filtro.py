@@ -1,6 +1,7 @@
 # filtro.py
 import re
 import json
+import hashlib
 import config
 from blockchain_client import BlockchainClient
 from phishing_detector import PhishingDetector
@@ -17,8 +18,16 @@ TIPOS_WALLET = (
     "Tezos (XTZ)", "Cosmos (ATOM)", "Polkadot (DOT)", "Dirección Cripto (JS)"
 )
 
-# Palabras que, cerca de una posible dirección cripto, aumentan la confianza
-# de que es una wallet real de pago y no un hash/string random.
+# Tipos con checksum Base58Check verificable matemáticamente. Si el checksum
+# no valida, se descarta directo — no es "poca confianza", es inválido.
+TIPOS_BASE58CHECK = ("Bitcoin (Legacy)", "Litecoin (Legacy)", "Dogecoin", "Dash")
+
+# Tipos con regex estructuralmente débil (un prefijo corto + rango amplio
+# de caracteres, sin checksum verificable offline). Cualquier hash/base64
+# random del tamaño correcto matchea. Si no hay contexto fuerte (🟢 ALTA),
+# se descartan directo en vez de guardarse como ruido de baja prioridad.
+TIPOS_REGEX_DEBIL = ("Solana (SOL)", "Polkadot (DOT)", "Cosmos (ATOM)")
+
 CONTEXTO_WALLET = [
     "wallet", "billetera", "cartera", "deposit", "depósito", "enviar", "envío",
     "pay", "pago", "recibir", "transferencia", "usdt", "btc", "eth", "trx",
@@ -26,17 +35,15 @@ CONTEXTO_WALLET = [
     "address", "dirección",
 ]
 
-# Mismo mecanismo para cuentas financieras: sin esto, cualquier código de
-# 8 letras mayúsculas (ej: "BLACKLISTED", "DISALLOW" en un robots.txt)
-# pasa la validación de formato de SWIFT/BIC y se reporta como si fuera
-# una cuenta real.
 CONTEXTO_CUENTA_FINANCIERA = [
     "cbu", "cvu", "clabe", "iban", "swift", "bic", "pix",
     "cuenta", "banco", "bancaria", "transferencia", "transferir",
     "deposit", "depósito", "pago", "pagar", "enviar dinero",
     "account", "bank", "transfer", "payment",
-    "银行", "账户", "转账",  # banco / cuenta / transferir (chino)
+    "银行", "账户", "转账",
 ]
+
+BASE58_ALFABETO = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 
 class MotorFiltro:
@@ -85,6 +92,37 @@ class MotorFiltro:
         return False
 
     @staticmethod
+    def validar_base58check(direccion: str) -> bool:
+        """
+        Verifica el checksum real (doble SHA-256, últimos 4 bytes) de una
+        dirección Base58Check. Esto es matemático, no heurístico: una
+        dirección real de Bitcoin/Litecoin/Dogecoin/Dash SIEMPRE pasa esto,
+        y basura aleatoria (fragmentos de SVG, base64, hashes de git) falla
+        con probabilidad ~1 en 4 mil millones. Reemplaza cualquier necesidad
+        de "adivinar por contexto" para estos tipos.
+        """
+        try:
+            if not direccion or any(c not in BASE58_ALFABETO for c in direccion):
+                return False
+
+            num = 0
+            for char in direccion:
+                num = num * 58 + BASE58_ALFABETO.index(char)
+
+            combinado = num.to_bytes((num.bit_length() + 7) // 8, 'big') if num else b''
+            ceros_iniciales = len(direccion) - len(direccion.lstrip('1'))
+            decodificado = b'\x00' * ceros_iniciales + combinado
+
+            if len(decodificado) < 5:
+                return False
+
+            payload, checksum = decodificado[:-4], decodificado[-4:]
+            checksum_calculado = hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+            return checksum_calculado == checksum
+        except Exception:
+            return False
+
+    @staticmethod
     def validar_cbu(cbu: str) -> bool:
         cbu = re.sub(r'\D', '', cbu)
         if len(cbu) != 22:
@@ -121,11 +159,6 @@ class MotorFiltro:
         return True
 
     def _confianza_por_contexto(self, texto, pos_inicio, pos_fin, palabras_clave):
-        """
-        Genérico: mira una ventana alrededor del match para ver si hay
-        contexto relevante cerca. Se usa tanto para wallets como para
-        cuentas financieras.
-        """
         inicio = max(0, pos_inicio - 60)
         fin = min(len(texto), pos_fin + 60)
         ventana = texto[inicio:fin].lower()
@@ -184,7 +217,7 @@ class MotorFiltro:
         return None
 
     # =============================================================
-    # 🕸️ CORRELACIÓN (vínculos entre campañas)
+    # 🕸️ CORRELACIÓN
     # =============================================================
     def _cargar_indice_correlacion(self):
         try:
@@ -245,6 +278,11 @@ class MotorFiltro:
                 if es_cuenta_financiera and not self._es_cuenta_financiera_valida(nombre, valor):
                     continue
 
+                # Checksum matemático real: si falla, no es una dirección
+                # válida — se descarta acá, sin llegar ni a "baja confianza".
+                if nombre in TIPOS_BASE58CHECK and not self.validar_base58check(valor):
+                    continue
+
                 clave_unica = f"{nombre}:{valor[:80]}"
                 if clave_unica in ya_encontrado:
                     continue
@@ -256,13 +294,16 @@ class MotorFiltro:
 
                 if es_wallet:
                     confianza = self._confianza_por_contexto(texto, match.start(), match.end(), CONTEXTO_WALLET)
+
+                    # Tipos con regex débil (sin checksum): sin contexto
+                    # fuerte, se descartan directo — no vale la pena
+                    # guardarlos ni como MEDIO, generan puro volumen.
+                    if nombre in TIPOS_REGEX_DEBIL and confianza != "🟢 ALTA":
+                        continue
+
                     if confianza == "🟡 MEDIA":
                         peligro = "🟡 MEDIO"
 
-                # Cuentas financieras SIN dígito verificador propio (CLABE,
-                # PIX, SWIFT) necesitan contexto para no colarse como ruido.
-                # CBU e IBAN ya se validaron con checksum arriba, pero igual
-                # sumamos la señal de contexto para reforzar la confianza.
                 if es_cuenta_financiera:
                     confianza = self._confianza_por_contexto(texto, match.start(), match.end(), CONTEXTO_CUENTA_FINANCIERA)
                     if confianza == "🟡 MEDIA":
@@ -306,26 +347,34 @@ class MotorFiltro:
         if config.ENABLE_JS_ANALYSIS and self.js_analyzer:
             if origen.endswith('.js') or ('function' in texto and 'var' in texto and '=' in texto):
                 resultados_js = self.js_analyzer.analizar_js(texto, origen)
+
                 for endpoint in resultados_js.get('endpoints', []):
-                    if endpoint:
-                        h = {"tipo": "Endpoint API (JS)", "valor": endpoint, "origen": origen, "peligro": "🟡 MEDIO"}
-                        hallazgos.append(h)
-                        self.guardar_hallazgo(h)
+                    # Filtra el "chrome" propio de Wayback Machine
+                    # (donate.php, account/login.php) que se cuela cuando
+                    # el rastreador recupera una copia archivada — no es
+                    # del sitio investigado, es de la interfaz de archive.org.
+                    if not endpoint or "archive.org" in endpoint.lower():
+                        continue
+                    h = {"tipo": "Endpoint API (JS)", "valor": endpoint, "origen": origen, "peligro": "🟡 MEDIO"}
+                    hallazgos.append(h)
+                    self.guardar_hallazgo(h)
+
                 for addr in resultados_js.get('crypto_addresses', []):
-                    if addr:
-                        h = {"tipo": "Dirección Cripto (JS)", "valor": addr, "origen": origen, "peligro": "🔴 ALTO"}
-                        hallazgos.append(h)
-                        self.guardar_hallazgo(h)
-                        self._registrar_correlacion("Dirección Cripto (JS)", addr, origen)
-                        blockchain = self._detectar_blockchain(addr)
-                        if blockchain:
-                            enriquecido = self._enriquecer_direccion(addr, blockchain)
-                            if enriquecido:
-                                try:
-                                    with open(config.BLOCKCHAIN_INSIGHTS_FILE, "a", encoding="utf-8") as f:
-                                        f.write(json.dumps(enriquecido, indent=2) + "\n")
-                                except Exception as e:
-                                    print(f"   ⚠️ Error guardando insight blockchain: {e}")
+                    if not addr:
+                        continue
+                    h = {"tipo": "Dirección Cripto (JS)", "valor": addr, "origen": origen, "peligro": "🔴 ALTO"}
+                    hallazgos.append(h)
+                    self.guardar_hallazgo(h)
+                    self._registrar_correlacion("Dirección Cripto (JS)", addr, origen)
+                    blockchain = self._detectar_blockchain(addr)
+                    if blockchain:
+                        enriquecido = self._enriquecer_direccion(addr, blockchain)
+                        if enriquecido:
+                            try:
+                                with open(config.BLOCKCHAIN_INSIGHTS_FILE, "a", encoding="utf-8") as f:
+                                    f.write(json.dumps(enriquecido, indent=2) + "\n")
+                            except Exception as e:
+                                print(f"   ⚠️ Error guardando insight blockchain: {e}")
 
         self._detectar_puente(hallazgos, origen)
         return hallazgos
