@@ -1,29 +1,46 @@
 # analysis_policy.py
 """
-Traduce un RiskScoreResult (de risk_score.py) en una DECISIÓN de cuánto
-analizar un candidato. No hace HTTP ni crawling — solo decide, con
-explicación, qué nivel de profundidad amerita.
+Traduce un RiskScoreResult (de risk_score.py) en una DECISIÓN de nivel
+de análisis. No hace HTTP, no crawlea, no toca risk_score.py.
 
-Separado de risk_score.py a propósito: los umbrales y reglas de acá van
-a cambiar con la práctica mucho más seguido que las matemáticas del score.
+Nivel 0: no analizar ahora. NO significa "descartado para siempre" — el
+         candidate se conserva y puede subir de nivel si aparecen nuevas
+         señales más adelante (vía candidate_store).
+Nivel 1: HTML liviano de la página en sí. Sin seguir recursos externos,
+         sin análisis profundo de JS.
+Nivel 2: análisis profundo completo (filtro.py tal como existe hoy).
 """
 from dataclasses import dataclass
 from risk_score import RiskScoreResult
 
-# Umbrales PROVISIONALES — igual que en risk_score.py, existen para poder
-# probar la política, no son la versión final.
-UMBRAL_NIVEL_1 = None   # a definir con casos de prueba
-UMBRAL_NIVEL_2 = None   # a definir con casos de prueba
-
-FUENTES_CONFIRMADAS = {"openphish", "urlhaus", "phishstats"}
+UMBRAL_NIVEL_1 = 15
+UMBRAL_NIVEL_2 = 50
 
 
 @dataclass
 class Decision:
-    nivel: int              # 0 = descartar, 1 = HTML liviano, 2 = análisis profundo
-    motivo: str              # explicación legible
-    forzado_por_evidencia: bool = False  # True si saltó el umbral normal
+    nivel: int
+    score_efectivo: float
+    score_original: float
+    motivo: str
 
 
 def decidir(resultado: RiskScoreResult) -> Decision:
-    ...  # a implementar una vez acordados los umbrales
+    score_efectivo = max(resultado.score, 0)
+
+    if score_efectivo >= UMBRAL_NIVEL_2:
+        nivel = 2
+        motivo = f"score {score_efectivo:.1f} ≥ {UMBRAL_NIVEL_2} → análisis profundo"
+    elif score_efectivo >= UMBRAL_NIVEL_1:
+        nivel = 1
+        motivo = f"score {score_efectivo:.1f} ≥ {UMBRAL_NIVEL_1} → HTML liviano"
+    else:
+        nivel = 0
+        motivo = f"score {score_efectivo:.1f} < {UMBRAL_NIVEL_1} → no analizar ahora (se conserva el candidate)"
+
+    return Decision(
+        nivel=nivel,
+        score_efectivo=score_efectivo,
+        score_original=resultado.score,
+        motivo=motivo,
+    )
