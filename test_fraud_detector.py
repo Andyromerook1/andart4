@@ -8,7 +8,7 @@ casos = [
         Buscamos vendedor con experiencia en atención al cliente.
         Sueldo fijo más comisiones por venta. Horario full time.
     """),
-    ("B. Programa de referidos normal (ej: apps legítimas)", """
+    ("B. Programa de referidos normal", """
         Invitá a tus amigos y ambos reciben $500 de crédito
         para usar en tu próxima compra. Sin límite de invitaciones.
     """),
@@ -17,7 +17,7 @@ casos = [
         Por cada persona que invites ganás $30.000.
         Generá ingresos pasivos desde tu casa.
     """),
-    ("D. Curso caro SIN piramidal (no debería confundirse)", """
+    ("D. Curso caro SIN piramidal", """
         Curso de programación intensivo. Costo $100.000.
         Clases en vivo, certificado al finalizar, cupos limitados.
     """),
@@ -26,9 +26,27 @@ casos = [
         Rentabilidad histórica variable según el mercado. Consultá con
         tu asesor financiero antes de invertir.
     """),
-    ("F. Promesa de rentabilidad garantizada (señal fuerte)", """
-        Invertí con nosotros y generá un 20% semanal garantizado.
-        Últimos cupos disponibles, sumate antes que se acabe.
+    ("F. Inversión fraudulenta clara (rentabilidad garantizada)", """
+        Últimos cupos. Invertí hoy y obtené 20% semanal garantizado.
+    """),
+    ("G. Curso legítimo + urgencia comercial normal", """
+        Últimos cupos para nuestro curso de Python. Inscribite ya.
+    """),
+    ("H. MLM legítimo con producto real (no debería marcar fraude)", """
+        Sumate como distribuidor de nuestra línea de cosmética.
+        Ganás comisión por cada venta que hagas del catálogo.
+    """),
+    ("I. Piramidal con pago de entrada + referidos (caso fuerte)", """
+        Pagá $50.000 para ingresar al sistema. Por cada persona que
+        invites al equipo ganás $15.000. Últimos cupos disponibles.
+    """),
+    ("J. Ecommerce con 'últimas unidades' (no es fraude)", """
+        Últimas unidades disponibles de nuestra colección de invierno.
+        Envío gratis en compras superiores a $30.000.
+    """),
+    ("K. Crypto con 'duplicá tus fondos' (señal fuerte)", """
+        Duplicá tu inversión en 7 días con nuestro sistema automatizado
+        de trading. Sin riesgo, resultados garantizados.
     """),
 ]
 
