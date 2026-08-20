@@ -1,8 +1,12 @@
 # ct_monitor.py
 """
-Monitorea Certificate Transparency logs en busca de dominios de phishing
-recién creados. No depende de un solo índice — usa CTProvider, que
-intenta crt.sh y, si falla, CertSpotter como respaldo automático.
+Sensor de Certificate Transparency — uno más entre varios descubridores
+de Andart (junto a feeds, GitHub, web). No es "el radar principal": si
+CT está degradado, Andart sigue funcionando con las demás fuentes.
+
+Usa CTProvider, que intenta crt.sh y, si falla, CertSpotter como
+respaldo (aunque CertSpotter solo cubre DOMAIN_SEARCH, no BRAND_SEARCH —
+ver ct_providers.py).
 """
 import time
 import json
@@ -11,7 +15,7 @@ import re
 from datetime import datetime, timezone
 
 from phishing_detector import PhishingDetector
-from ct_providers import CTProvider
+from ct_providers import CTProvider, BRAND_SEARCH, DOMAIN_SEARCH
 
 PALABRAS_SOSPECHOSAS = [
     "verificar", "verificacion", "seguro", "soporte", "recuperar",
@@ -98,10 +102,10 @@ class MonitorCertificados:
         }
 
     # =============================================================
-    # ESTRATEGIA 1: por marca conocida
+    # ESTRATEGIA 1: por marca conocida (BRAND_SEARCH)
     # =============================================================
     def buscar_por_marca(self, marca):
-        data = self.provider.query(marca)
+        data = self.provider.query(marca, tipo=BRAND_SEARCH)
         dominios_vistos = set()
         resultados = []
         for entrada in data:
@@ -131,10 +135,10 @@ class MonitorCertificados:
         return todos
 
     # =============================================================
-    # ESTRATEGIA 2: por patrón sospechoso
+    # ESTRATEGIA 2: por patrón sospechoso (BRAND_SEARCH)
     # =============================================================
     def buscar_por_patron(self, palabra, tld):
-        data = self.provider.query(f"{palabra}.{tld}")
+        data = self.provider.query(f"{palabra}.{tld}", tipo=BRAND_SEARCH)
         dominios_vistos = set()
         resultados = []
         for entrada in data:
@@ -175,3 +179,13 @@ class MonitorCertificados:
                 vistos.add(r["dominio"])
                 finales.append(r)
         return finales
+
+    def estado(self) -> dict:
+        """
+        Permite que quien orqueste los descubridores (futuro
+        orquestador multi-fuente) sepa si CT está funcionando sin
+        depender de leer prints por consola. Ej: {'crt.sh': 'OK',
+        'certspotter': 'crt.sh no soporta...'} o vacío si no se corrió
+        ninguna consulta todavía.
+        """
+        return self.provider.estado_actual()
