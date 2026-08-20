@@ -72,7 +72,7 @@ class CertSpotterProvider:
                     "expand": "dns_names",
                 },
                 timeout=20,
-                headers={"User-Agent": "Mozilla/5.0 (compatible; Andart-OSINT)"},
+                headers={"User-Agent": "curl/8.0"},
             )
         except Exception as e:
             raise CTProviderError(f"certspotter: {type(e).__name__} {e}")
