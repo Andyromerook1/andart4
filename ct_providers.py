@@ -6,13 +6,15 @@ el fallback respeta qué tipo de búsqueda soporta cada proveedor.
 BRAND_SEARCH: buscar cualquier certificado que contenga un término en
               cualquier posición (ej: "%paypal%" encuentra
               "paypa1-login.xyz"). Necesario para descubrir dominios que
-              NO conocemos de antemano — el caso de uso central de Andart.
+              NO conocemos de antemano.
 DOMAIN_SEARCH: buscar certificados de un dominio conocido y sus
                subdominios (ej: "bybit.com" -> "login.bybit.com").
-               Útil para otra cosa, pero no reemplaza a BRAND_SEARCH.
 
 Un proveedor que no soporta el tipo de consulta pedido se SALTA sin
 contarlo como caído — no es una falla, es una incompatibilidad de diseño.
+
+CT es UN sensor más entre varios que usa Andart para descubrir
+candidatos (junto a feeds, GitHub, web, etc.) — no el único radar.
 """
 import requests
 import subprocess
@@ -133,8 +135,6 @@ class CTProvider:
                 self.ultimo_estado[provider.nombre] = "OK"
                 return resultados
             except CTProviderNoSoportado:
-                # No es una falla — este proveedor simplemente no
-                # atiende este tipo de consulta. No se loguea como error.
                 continue
             except CTProviderError as e:
                 self.ultimo_estado[provider.nombre] = str(e)
