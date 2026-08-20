@@ -1,9 +1,9 @@
 # ct_monitor.py
 """
-Monitorea Certificate Transparency logs (vía crt.sh, público y gratuito)
-en busca de dominios de phishing recién creados.
+Monitorea Certificate Transparency logs en busca de dominios de phishing
+recién creados. No depende de un solo índice — usa CTProvider, que
+intenta crt.sh y, si falla, CertSpotter como respaldo automático.
 """
-import requests
 import time
 import json
 import os
@@ -11,6 +11,7 @@ import re
 from datetime import datetime, timezone
 
 from phishing_detector import PhishingDetector
+from ct_providers import CTProvider
 
 PALABRAS_SOSPECHOSAS = [
     "verificar", "verificacion", "seguro", "soporte", "recuperar",
@@ -25,24 +26,18 @@ TLDS_BARATOS = [
     "online", "site", "store", "info", "biz", "live", "vip"
 ]
 
-# Plataformas de hosting compartido: un phishing alojado como subdominio
-# acá (ej: bybit--login.pages.dev) NO debe compararse por su dominio base
-# (pages.dev), sino por el label que está justo antes — ahí es donde el
-# atacante mete el nombre de la marca imitada.
 SUFIJOS_HOSTING_COMPARTIDO = {
     "pages.dev", "github.io", "vercel.app", "netlify.app",
     "herokuapp.com", "repl.co", "glitch.me", "workers.dev",
     "web.app", "firebaseapp.com", "surge.sh", "ondigitalocean.app",
 }
 
-# Un hostname válido: solo letras/números/guiones/puntos, sin espacios,
-# al menos un punto. Descarta basura tipo "bybit kripto varlik...".
 PATRON_HOSTNAME_VALIDO = re.compile(r'^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$')
 
 
 class MonitorCertificados:
     def __init__(self, archivo_marcas="marcas_vigiladas.json"):
-        self.base_url = "https://crt.sh/"
+        self.provider = CTProvider()
         self.marcas = self._cargar_marcas(archivo_marcas)
         self.phishing_detector = PhishingDetector()
 
@@ -57,35 +52,14 @@ class MonitorCertificados:
             todas.extend(categoria)
         return list(dict.fromkeys(todas))
 
-    def _consultar_crtsh(self, query):
-        try:
-            resp = requests.get(
-                self.base_url,
-                params={"q": query, "output": "json"},
-                timeout=25,
-                headers={"User-Agent": "Mozilla/5.0 (compatible; Andart-OSINT)"}
-            )
-            if resp.status_code != 200:
-                return []
-            return resp.json()
-        except Exception as e:
-            print(f"⚠️ Error consultando crt.sh para '{query}': {e}")
-            return []
-
     @staticmethod
     def _separar_hostnames(name_value: str) -> list:
-        """
-        Un certificado puede cubrir varios hostnames (SAN), devueltos por
-        crt.sh separados por '\\n'. Se separan, se limpia el wildcard '*.'
-        y se descarta cualquier entrada que no parezca un hostname real
-        (nombres de organización, strings con espacios, etc.).
-        """
         candidatos = []
         for linea in name_value.split("\n"):
             h = linea.strip().lower().lstrip("*.")
             if h and PATRON_HOSTNAME_VALIDO.match(h):
                 candidatos.append(h)
-        return list(dict.fromkeys(candidatos))  # sin duplicados, preserva orden
+        return list(dict.fromkeys(candidatos))
 
     @staticmethod
     def _extraer_tld(dominio: str) -> str:
@@ -93,11 +67,11 @@ class MonitorCertificados:
         return partes[-1] if len(partes) >= 2 else ""
 
     @staticmethod
-    def _dias_desde_emision(entry_timestamp: str):
+    def _dias_desde_emision(entry_timestamp):
         if not entry_timestamp:
             return None
         try:
-            fecha = datetime.fromisoformat(entry_timestamp.replace("Z", "+00:00"))
+            fecha = datetime.fromisoformat(str(entry_timestamp).replace("Z", "+00:00"))
             if fecha.tzinfo is None:
                 fecha = fecha.replace(tzinfo=timezone.utc)
             return max((datetime.now(timezone.utc) - fecha).days, 0)
@@ -105,20 +79,12 @@ class MonitorCertificados:
             return None
 
     def _dominio_relevante_para_similitud(self, hostname: str) -> str:
-        """
-        Si el hostname es un subdominio de una plataforma de hosting
-        compartido conocida (pages.dev, github.io, etc.), el label
-        relevante para comparar contra marcas NO es el dominio base
-        (pages.dev), es el subdominio completo (bybit--login-us).
-        Sin esto, cualquier phishing alojado en estas plataformas se
-        vuelve invisible para el detector de typosquatting.
-        """
         for sufijo in SUFIJOS_HOSTING_COMPARTIDO:
             if hostname.endswith("." + sufijo):
-                return hostname[: -(len(sufijo) + 1)]  # todo lo que está ANTES del sufijo
+                return hostname[: -(len(sufijo) + 1)]
         return hostname
 
-    def _enriquecer(self, hostname: str, motivo: str, id_certificado, entry_timestamp: str) -> dict:
+    def _enriquecer(self, hostname: str, motivo: str, id_certificado, entry_timestamp) -> dict:
         dominio_para_similitud = self._dominio_relevante_para_similitud(hostname)
         _, dominio_legitimo, similitud = self.phishing_detector.es_clon(dominio_para_similitud)
         return {
@@ -135,7 +101,7 @@ class MonitorCertificados:
     # ESTRATEGIA 1: por marca conocida
     # =============================================================
     def buscar_por_marca(self, marca):
-        data = self._consultar_crtsh(f"%{marca}%")
+        data = self.provider.query(marca)
         dominios_vistos = set()
         resultados = []
         for entrada in data:
@@ -145,10 +111,10 @@ class MonitorCertificados:
                     continue
                 dominios_vistos.add(hostname)
                 if hostname.endswith(f"{marca}.com") or hostname == f"{marca}.com":
-                    continue  # dominio oficial, no es el objetivo
+                    continue
                 resultados.append(self._enriquecer(
                     hostname, f"imita marca: {marca}",
-                    entrada.get("id"), entrada.get("entry_timestamp"),
+                    entrada.get("id_certificado"), entrada.get("entry_timestamp"),
                 ))
         return resultados
 
@@ -161,14 +127,14 @@ class MonitorCertificados:
                 print(f"   🚨 {r['dominio']} ({r['motivo']}, similitud={r['similitud_typosquatting']})")
             todos.extend(encontrados)
             time.sleep(pausa)
+        print(f"   ℹ️ Estado de proveedores CT: {self.provider.estado_actual()}")
         return todos
 
     # =============================================================
     # ESTRATEGIA 2: por patrón sospechoso
     # =============================================================
     def buscar_por_patron(self, palabra, tld):
-        query = f"%{palabra}%.{tld}"
-        data = self._consultar_crtsh(query)
+        data = self.provider.query(f"{palabra}.{tld}")
         dominios_vistos = set()
         resultados = []
         for entrada in data:
@@ -179,7 +145,7 @@ class MonitorCertificados:
                 dominios_vistos.add(hostname)
                 resultados.append(self._enriquecer(
                     hostname, f"patrón sospechoso: '{palabra}' + .{tld}",
-                    entrada.get("id"), entrada.get("entry_timestamp"),
+                    entrada.get("id_certificado"), entrada.get("entry_timestamp"),
                 ))
         return resultados
 
