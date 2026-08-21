@@ -20,7 +20,7 @@ from typing import Optional
 # señales distintas tenga dentro. Evita que una página con muchas
 # señales débiles de la misma familia infle el score más que una con
 # pocas señales pero contundentes.
-TOPE_POR_FAMILIA = 45
+TOPE_POR_FAMILIA = 60  # antes era 45
 
 # El 'count' (cuántas veces se vio la misma señal en visitas repetidas)
 # NO multiplica el peso — solo se usa como señal de persistencia con un
