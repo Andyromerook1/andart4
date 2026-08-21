@@ -1,14 +1,20 @@
 # candidate_store.py
 """
 Persistencia de candidatos detectados por las distintas fuentes
-(ct_monitor, github_hunter, feeds, etc.). No hace HTTP, no decide
-niveles — solo guarda observaciones y delega a risk_score.py /
-analysis_policy.py el cálculo de score y nivel.
+(ct_monitor, github_hunter, feeds, fraud_detector, etc.). No hace HTTP,
+no decide niveles — solo guarda observaciones y delega a risk_score.py /
+content_risk_score.py / analysis_policy.py el cálculo de score y nivel.
 
 Principio clave: candidate_store ACUMULA OBSERVACIONES.
-risk_score DECIDE cómo interpretarlas. candidate_store nunca elige
-"la mejor fuente" ni ninguna otra lógica de scoring — eso sería meter
-conocimiento de riesgo dentro del almacenamiento.
+Los motores de score DECIDEN cómo interpretarlas. candidate_store nunca
+elige "la mejor fuente" ni ninguna otra lógica de scoring — eso sería
+meter conocimiento de riesgo dentro del almacenamiento.
+
+Dos dimensiones de riesgo, calculadas por separado (ver discusión de
+diseño): DOMAIN_RISK (infraestructura: edad, TLD, typosquatting, CT,
+fuente) y CONTENT_RISK (texto: reclutamiento, inversión fraudulenta,
+etc.). No se mezclan en un solo score — analysis_policy.py decide el
+nivel mirando ambos.
 
 Un candidate se identifica por dominio normalizado, pero conserva
 hostnames y URLs originales (importante para correlación de
@@ -23,6 +29,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from risk_score import calcular_score, RiskScoreResult
+from content_risk_score import calcular_content_risk, ContentRiskResult
 from analysis_policy import decidir
 
 import config
@@ -130,19 +137,25 @@ class CandidateStore:
             "hostnames": [],
             "urls": [],
 
-            # Señales generales / infraestructura
+            # Señales generales / infraestructura (DOMAIN_RISK)
             "signals": [],
 
-            # Señales obtenidas analizando contenido
-            # con fraud_detector.py
+            # Señales obtenidas analizando contenido con fraud_detector.py
+            # (CONTENT_RISK)
             "content_signals": [],
             "content_type_posible": None,
 
-            # Entradas que luego consume risk_score.py
+            # Entradas que consume risk_score.py
             "_score_inputs": {},
 
-            "score": 0.0,
+            # DOMAIN_RISK
+            "score": 0.0,             # se mantiene por compatibilidad hacia atrás
+            "domain_risk": 0.0,
             "score_signals": [],
+
+            # CONTENT_RISK
+            "content_risk": 0.0,
+            "content_risk_detail": {},
 
             "level": 0,
             "level_reason": "",
@@ -195,6 +208,9 @@ class CandidateStore:
             existente.setdefault("content_type_posible", None)
             existente.setdefault("_score_inputs", {})
             existente.setdefault("score_signals", [])
+            existente.setdefault("domain_risk", existente.get("score", 0.0))
+            existente.setdefault("content_risk", 0.0)
+            existente.setdefault("content_risk_detail", {})
 
             return existente
 
@@ -243,7 +259,7 @@ class CandidateStore:
                 candidate["hostnames"].append(hostname)
 
     # =========================================================
-    # SEÑALES GENERALES
+    # SEÑALES GENERALES (DOMAIN_RISK)
     # =========================================================
 
     def add_signal(
@@ -312,7 +328,7 @@ class CandidateStore:
         return candidate
 
     # =========================================================
-    # SEÑALES DE CONTENIDO / FRAUD DETECTOR
+    # SEÑALES DE CONTENIDO / FRAUD DETECTOR (CONTENT_RISK)
     # =========================================================
 
     def add_content_signals(
@@ -322,20 +338,11 @@ class CandidateStore:
         origen_url: str = None,
     ):
         """
-        Recibe un ResultadoFraude de fraud_detector.py y registra
-        cada señal de contenido en el candidate.
-
-        Reutiliza una lógica de deduplicación por tipo similar a
-        add_signal():
-
-        - first_seen
-        - last_seen
-        - count
-
-        No modifica el score directamente.
-
-        La interpretación de estas señales deberá hacerse después
-        desde risk_score.py mediante recalculate().
+        Recibe un ResultadoFraude de fraud_detector.py y registra cada
+        señal de contenido en el candidate. Reutiliza la misma lógica
+        de deduplicación por tipo que add_signal() (first_seen,
+        last_seen, count). No calcula CONTENT_RISK acá — eso lo hace
+        recalculate() llamando a content_risk_score.py.
         """
 
         candidate = self._data.get(
@@ -350,7 +357,6 @@ class CandidateStore:
             [],
         )
 
-        # Tipo general que fraud_detector considera más probable.
         candidate["content_type_posible"] = getattr(
             resultado_fraude,
             "tipo_posible",
@@ -364,34 +370,12 @@ class CandidateStore:
         )
 
         for senal in señales:
-            categoria = getattr(
-                senal,
-                "categoria",
-                "desconocida",
-            )
+            categoria = getattr(senal, "categoria", "desconocida")
+            tipo = getattr(senal, "tipo", "desconocido")
+            fragmento = getattr(senal, "fragmento", None)
+            peso = getattr(senal, "peso", 0)
 
-            tipo = getattr(
-                senal,
-                "tipo",
-                "desconocido",
-            )
-
-            fragmento = getattr(
-                senal,
-                "fragmento",
-                None,
-            )
-
-            peso = getattr(
-                senal,
-                "peso",
-                None,
-            )
-
-            tipo_completo = (
-                f"{categoria}:{tipo}"
-            )
-
+            tipo_completo = f"{categoria}:{tipo}"
             ahora = _ahora_iso()
 
             existente = next(
@@ -405,18 +389,9 @@ class CandidateStore:
 
             if existente:
                 existente["last_seen"] = ahora
-
-                existente["count"] = (
-                    existente.get("count", 0) + 1
-                )
-
-                # Conservamos el fragmento detectado más reciente.
+                existente["count"] = existente.get("count", 0) + 1
                 existente["fragment"] = fragmento
-
-                # También actualizamos el peso por si en el futuro
-                # fraud_detector cambia la ponderación.
                 existente["weight"] = peso
-
                 if origen_url:
                     existente["source_url"] = origen_url
 
@@ -434,8 +409,6 @@ class CandidateStore:
                     }
                 )
 
-        # Si conocemos la URL concreta donde se encontró el contenido,
-        # también la conservamos dentro del candidate.
         if origen_url:
             self._registrar_url_y_host(
                 candidate,
@@ -447,7 +420,7 @@ class CandidateStore:
         return candidate
 
     # =========================================================
-    # SCORE / NIVEL
+    # SCORE / NIVEL — DOMAIN_RISK + CONTENT_RISK, sin sumarse
     # =========================================================
 
     def recalculate(
@@ -461,34 +434,33 @@ class CandidateStore:
         if not candidate:
             return None
 
+        # --- DOMAIN_RISK ---
         inputs = dict(
             candidate.get(
                 "_score_inputs",
                 {},
             )
         )
-
-        # candidate_store entrega todas las fuentes observadas.
-        # La interpretación corresponde exclusivamente a risk_score.py.
         inputs["fuente"] = candidate.get(
             "discovered_by",
             [],
         )
+        domain_resultado: RiskScoreResult = calcular_score(**inputs)
 
-        resultado: RiskScoreResult = calcular_score(
-            **inputs
+        # --- CONTENT_RISK ---
+        content_resultado: ContentRiskResult = calcular_content_risk(
+            candidate.get("content_signals", [])
         )
 
-        decision = decidir(resultado)
+        # --- Decisión combinada, sin sumar los dos scores ---
+        decision = decidir(domain_resultado, content_resultado)
 
-        candidate["score"] = resultado.score
+        candidate["domain_risk"] = domain_resultado.score
+        candidate["score"] = domain_resultado.score  # compatibilidad hacia atrás
+        candidate["score_signals"] = domain_resultado.as_dict().get("signals", [])
 
-        candidate["score_signals"] = (
-            resultado.as_dict().get(
-                "signals",
-                [],
-            )
-        )
+        candidate["content_risk"] = content_resultado.score
+        candidate["content_risk_detail"] = content_resultado.as_dict()
 
         candidate["level"] = decision.nivel
         candidate["level_reason"] = decision.motivo
