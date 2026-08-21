@@ -10,6 +10,8 @@ from filtro import MotorFiltro
 from network_client import SecureRequester
 from wayback_client import WaybackClient
 from pdf_metadata import PDFMetadataExtractor
+from fraud_detector import FraudDetector
+from candidate_store import CandidateStore
 import config
 
 
@@ -33,6 +35,10 @@ class Rastreador:
         self.wayback = WaybackClient()
         self.pdf_extractor = PDFMetadataExtractor()
 
+        # --- señales de contenido (fraud_detector) hacia candidate_store ---
+        self.fraud_detector = FraudDetector()
+        self.candidate_store = CandidateStore()
+
         self.rutas_publicas = config.SENSITIVE_PATHS
 
         # --- robots.txt: un parser cacheado por dominio ---
@@ -48,6 +54,7 @@ class Rastreador:
         self.detener = True
         self._guardar_checkpoint()
         self._guardar_bloqueados()
+        self.candidate_store.save()
         sys.exit(0)
 
     def es_mismo_dominio(self, base, url):
@@ -70,7 +77,7 @@ class Rastreador:
                     if texto:
                         rp.parse(texto.splitlines())
                     else:
-                        rp = None  # sin robots.txt accesible → se permite por defecto
+                        rp = None
                 except Exception:
                     rp = None
                 self._robots_cache[dominio] = rp
@@ -80,7 +87,7 @@ class Rastreador:
                 return True
             return rp.can_fetch("*", url)
         except Exception:
-            return True  # ante la duda, no bloquea el rastreo por un error de parseo
+            return True
 
     # =============================================================
     # ⏱️ RATE LIMIT POR DOMINIO
@@ -158,6 +165,42 @@ class Rastreador:
         except Exception:
             pass
         return enlaces
+
+    def _extraer_texto_visible(self, html):
+        """
+        Extrae solo el texto legible de la página (sin tags, sin JS,
+        sin CSS) para pasarlo a fraud_detector.py — que espera lenguaje
+        natural, no marcado HTML.
+        """
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+            for tag in soup(["script", "style"]):
+                tag.decompose()
+            return soup.get_text(separator=" ", strip=True)
+        except Exception:
+            return ""
+
+    def _procesar_contenido_fraude(self, url, texto_visible):
+        """
+        Analiza el texto visible con fraud_detector y, si encuentra
+        señales, las registra en candidate_store — sin frenar el
+        rastreo si algo falla acá, mismo criterio defensivo que el
+        resto del archivo.
+        """
+        if not texto_visible or len(texto_visible) < 30:
+            return
+        try:
+            resultado = self.fraud_detector.analizar(texto_visible)
+            if not resultado.senales:
+                return
+            self.candidate_store.get_or_create(url, discovered_by="rastreador_web")
+            self.candidate_store.add_content_signals(url, resultado, origen_url=url)
+            candidate = self.candidate_store.recalculate(url)
+            if candidate:
+                print(f"   🕵️ Señal de fraude ({candidate['content_type_posible']}) "
+                      f"content_risk={candidate['content_risk']:.1f} nivel={candidate['level']} → {url[:70]}")
+        except Exception as e:
+            print(f"   ⚠️ Error analizando contenido de fraude: {e}")
 
     def agregar_rutas_publicas(self, url_base):
         parsed = urlparse(url_base)
@@ -250,6 +293,10 @@ class Rastreador:
                     for h in hallazgos:
                         self.filtro.guardar_hallazgo(h)
 
+                    # --- NUEVO: señales de contenido de fraude ---
+                    texto_visible = self._extraer_texto_visible(resp.text)
+                    self._procesar_contenido_fraude(url, texto_visible)
+
                     nuevos = self.extraer_enlaces(url, resp.text)
                     for enlace in nuevos:
                         if enlace not in self.visitados and enlace not in self.cola:
@@ -258,6 +305,7 @@ class Rastreador:
                 paginas_desde_checkpoint += 1
                 if paginas_desde_checkpoint >= config.CHECKPOINT_CADA_N_PAGINAS:
                     self._guardar_checkpoint()
+                    self.candidate_store.save()
                     paginas_desde_checkpoint = 0
 
             except Exception as e:
@@ -265,6 +313,7 @@ class Rastreador:
                 continue
 
         self._guardar_bloqueados()
+        self.candidate_store.save()
 
         if self.detener:
             print("\n🛑 Rastreo detenido por el usuario.")
