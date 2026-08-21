@@ -18,14 +18,15 @@ TIPOS_WALLET = (
     "Tezos (XTZ)", "Cosmos (ATOM)", "Polkadot (DOT)", "Dirección Cripto (JS)"
 )
 
-# Tipos con checksum Base58Check verificable matemáticamente (Tron usa el
-# MISMO algoritmo que Bitcoin: doble SHA-256, 4 bytes de checksum).
 TIPOS_BASE58CHECK = ("Bitcoin (Legacy)", "Litecoin (Legacy)", "Dogecoin", "Dash", "Tron (TRX)")
-
-# Tipos con regex estructuralmente débil (sin checksum verificable
-# offline). Ripple usa un alfabeto Base58 DISTINTO al de Bitcoin, así que
-# tampoco se puede validar con validar_base58check — va acá también.
 TIPOS_REGEX_DEBIL = ("Solana (SOL)", "Polkadot (DOT)", "Cosmos (ATOM)", "Ripple (XRP)")
+
+# Tipos que son ENTIDADES (Andart encontró algo), no señales de riesgo
+# por sí solas. Un email, un usuario de Telegram o un número de WhatsApp
+# son formas normales de contacto — solo se vuelven relevantes según el
+# CONTEXTO (ver distinción operativo/descriptivo más abajo).
+TIPOS_ENTIDAD_NEUTRA = ("Correo Electrónico", "Usuario Telegram (link)",
+                         "Usuario Telegram (mención)", "Número WhatsApp (con código país)")
 
 CONTEXTO_WALLET = [
     "wallet", "billetera", "cartera", "deposit", "depósito", "enviar", "envío",
@@ -42,8 +43,47 @@ CONTEXTO_CUENTA_FINANCIERA = [
     "银行", "账户", "转账",
 ]
 
-# Palabras reservadas de CSS/JSON-LD/schema.org que el regex de Telegram
-# atrapa por error (empiezan con @ pero no son usuarios).
+# Contexto específico de PIX (no tiene checksum público verificable como
+# CBU/IBAN, así que la única forma de bajar el ruido de UUIDs random es
+# EXIGIR contexto — no basta con que el formato matchee).
+CONTEXTO_PIX = [
+    "pix", "chave", "chave pix", "pagamento", "transferência",
+    "banco", "conta", "depósito", "enviar dinheiro",
+]
+
+# =============================================================
+# CONTEXTO OPERATIVO vs. DESCRIPTIVO
+#
+# La misma palabra ("estafa", "pago", "Telegram") aparece tanto en:
+#   - un sitio operando la estafa ("Escribinos por Telegram para
+#     invertir", imperativo/2da persona, instruyendo a ACTUAR ahora)
+#   - un artículo que la describe ("Reportamos esta estafa",
+#     "Las víctimas contactaron a @fulano", 3ra persona/pasado,
+#     narrando lo que YA pasó)
+#
+# Antes usábamos una sola lista de palabras ("estafa", "pago", etc.)
+# que subía la confianza en AMBOS casos por igual — eso es lo que
+# convertía un artículo de ScamWarners hablando DE una estafa en un
+# hallazgo 🔴 contra ScamWarners mismo.
+# =============================================================
+PATRONES_CONTEXTO_OPERATIVO = [
+    r'\b(escrib[íi]nos|contact[áa]nos|escrib[íi]me|contact[áa]me)\b',
+    r'\b(envi[áa]|deposit[áa]|transfer[íi])\w*\s+(a|al|a este)\b',
+    r'\bpag[áa]\s+(aqu[íi]|ahora|ya)\b',
+    r'\bpara\s+(invertir|participar|ingresar|unirte)\s+(contact|escrib|envi)',
+    r'\bhac[ée]\s+tu\s+(pago|dep[oó]sito|transferencia)\b',
+    r'\bclic[k]?\s+aqu[íi]\s+para\s+(pagar|invertir|depositar)\b',
+]
+
+PATRONES_CONTEXTO_DESCRIPTIVO = [
+    r'\b(la\s+v[íi]ctima|las\s+v[íi]ctimas|el\s+denunciante)\b',
+    r'\b(report[óo]|report[aá]ron|denunci[óo]|denunci[aá]ron)\b',
+    r'\b(seg[úu]n\s+(la\s+)?(investigaci[óo]n|polic[íi]a|fuentes))\b',
+    r'\b(fue\s+estafad|fueron\s+estafad|cay[óo]\s+en\s+la\s+estafa)\b',
+    r'\b(los\s+delincuentes|los\s+estafadores|el\s+estafador)\s+(usaron|utilizaron|se\s+hac[íi]an)\b',
+    r'\ben\s+este\s+caso\b',
+]
+
 DENYLIST_TELEGRAM = {
     "context", "graph", "type", "media", "keyframes", "supports",
     "toprimitive", "charset", "import", "page", "namespace", "document",
@@ -51,6 +91,15 @@ DENYLIST_TELEGRAM = {
 }
 
 BASE58_ALFABETO = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+CODIGOS_PAIS_ISO_SWIFT = {
+    "AR", "US", "GB", "BR", "MX", "ES", "DE", "FR", "IT", "CN", "JP",
+    "IN", "CA", "AU", "CH", "NL", "BE", "SE", "NO", "DK", "FI", "PT",
+    "PL", "AT", "IE", "RU", "TR", "SA", "AE", "IL", "ZA", "KR", "SG",
+    "HK", "TW", "TH", "VN", "ID", "MY", "PH", "NZ", "CL", "CO", "PE",
+    "UY", "PY", "BO", "EC", "VE", "CR", "PA", "GT", "HN", "SV", "NI",
+    "DO", "CU", "JM", "TT",
+}
 
 
 class MotorFiltro:
@@ -62,6 +111,9 @@ class MotorFiltro:
             for nombre, regex in datos.items()
             if regex and not nombre.startswith("=====")
         }
+
+        self._patrones_operativo = [re.compile(p, re.IGNORECASE) for p in PATRONES_CONTEXTO_OPERATIVO]
+        self._patrones_descriptivo = [re.compile(p, re.IGNORECASE) for p in PATRONES_CONTEXTO_DESCRIPTIVO]
 
         self.blockchain_client = None
         if config.AUTO_BLOCKCHAIN_ANALYSIS:
@@ -85,6 +137,7 @@ class MotorFiltro:
 
         self.direcciones_fallidas = set()
         self.indice_correlacion = self._cargar_indice_correlacion()
+        self._hallazgos_guardados = {}
 
     # =============================================================
     # 🧹 RUIDO / VALIDACIÓN
@@ -103,18 +156,14 @@ class MotorFiltro:
         try:
             if not direccion or any(c not in BASE58_ALFABETO for c in direccion):
                 return False
-
             num = 0
             for char in direccion:
                 num = num * 58 + BASE58_ALFABETO.index(char)
-
             combinado = num.to_bytes((num.bit_length() + 7) // 8, 'big') if num else b''
             ceros_iniciales = len(direccion) - len(direccion.lstrip('1'))
             decodificado = b'\x00' * ceros_iniciales + combinado
-
             if len(decodificado) < 5:
                 return False
-
             payload, checksum = decodificado[:-4], decodificado[-4:]
             checksum_calculado = hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
             return checksum_calculado == checksum
@@ -150,18 +199,50 @@ class MotorFiltro:
         except ValueError:
             return False
 
+    @staticmethod
+    def validar_swift(codigo: str) -> bool:
+        codigo = codigo.strip().upper()
+        if len(codigo) not in (8, 11):
+            return False
+        pais = codigo[4:6]
+        return pais in CODIGOS_PAIS_ISO_SWIFT
+
     def _es_cuenta_financiera_valida(self, nombre, valor):
         if "CBU" in nombre:
             return self.validar_cbu(valor)
         if "IBAN" in nombre:
             return self.validar_iban(valor)
-        return True
+        if "SWIFT" in nombre:
+            return self.validar_swift(valor)
+        return True  # PIX/CLABE se validan por contexto más abajo, no acá
 
     def _confianza_por_contexto(self, texto, pos_inicio, pos_fin, palabras_clave):
         inicio = max(0, pos_inicio - 60)
         fin = min(len(texto), pos_fin + 60)
         ventana = texto[inicio:fin].lower()
         return "🟢 ALTA" if any(kw in ventana for kw in palabras_clave) else "🟡 MEDIA"
+
+    def _clasificar_contexto(self, texto, pos_inicio, pos_fin):
+        """
+        Devuelve 'operativo', 'descriptivo', o 'neutro' según el
+        lenguaje alrededor del match. Operativo = instruye a actuar
+        AHORA (típico de un sitio que opera la estafa). Descriptivo =
+        narra algo que YA pasó (típico de un artículo que la reporta).
+        """
+        inicio = max(0, pos_inicio - 150)
+        fin = min(len(texto), pos_fin + 150)
+        ventana = texto[inicio:fin]
+
+        es_operativo = any(p.search(ventana) for p in self._patrones_operativo)
+        es_descriptivo = any(p.search(ventana) for p in self._patrones_descriptivo)
+
+        if es_operativo and not es_descriptivo:
+            return "operativo"
+        if es_descriptivo and not es_operativo:
+            return "descriptivo"
+        if es_operativo and es_descriptivo:
+            return "mixto"
+        return "neutro"
 
     # =============================================================
     # 🔗 BLOCKCHAIN
@@ -272,7 +353,6 @@ class MotorFiltro:
                 if not valor or len(valor) <= 5 or self.es_ruido_obvio(valor):
                     continue
 
-                # Denylist de Telegram: descarta palabras reservadas de CSS/JSON-LD
                 if "Telegram" in nombre:
                     usuario = valor.lstrip("@").split("/")[-1].lower()
                     if usuario in DENYLIST_TELEGRAM:
@@ -281,6 +361,14 @@ class MotorFiltro:
                 es_cuenta_financiera = any(t in nombre for t in TIPOS_CUENTA_FINANCIERA)
                 if es_cuenta_financiera and not self._es_cuenta_financiera_valida(nombre, valor):
                     continue
+
+                # PIX: sin checksum público verificable, se EXIGE contexto
+                # — un UUID solo, sin nada de "pix/chave/pagamento" cerca,
+                # se descarta directo (no se guarda ni como MEDIO).
+                if "PIX" in nombre:
+                    confianza_pix = self._confianza_por_contexto(texto, match.start(), match.end(), CONTEXTO_PIX)
+                    if confianza_pix != "🟢 ALTA":
+                        continue
 
                 if nombre in TIPOS_BASE58CHECK and not self.validar_base58check(valor):
                     continue
@@ -291,6 +379,7 @@ class MotorFiltro:
                 ya_encontrado.add(clave_unica)
 
                 es_wallet = nombre in TIPOS_WALLET
+                es_entidad_neutra = nombre in TIPOS_ENTIDAD_NEUTRA
                 peligro = "🔴 ALTO"
                 confianza = None
 
@@ -301,10 +390,23 @@ class MotorFiltro:
                     if confianza == "🟡 MEDIA":
                         peligro = "🟡 MEDIO"
 
-                if es_cuenta_financiera:
+                if es_cuenta_financiera and "PIX" not in nombre:
                     confianza = self._confianza_por_contexto(texto, match.start(), match.end(), CONTEXTO_CUENTA_FINANCIERA)
                     if confianza == "🟡 MEDIA":
                         peligro = "🟡 MEDIO"
+
+                if es_entidad_neutra:
+                    # Ya no basta con "hay una palabra de riesgo cerca" —
+                    # distinguimos si el texto INSTRUYE a actuar ahora
+                    # (operativo → 🔴) o solo NARRA algo que ya pasó
+                    # (descriptivo → informativo, no acusación).
+                    tipo_contexto = self._clasificar_contexto(texto, match.start(), match.end())
+                    if tipo_contexto in ("operativo", "mixto"):
+                        peligro = "🔴 ALTO"
+                        confianza = f"🟢 ALTA (contexto {tipo_contexto})"
+                    else:
+                        peligro = "ℹ️ ENTIDAD"
+                        confianza = f"contexto {tipo_contexto}, no operativo"
 
                 hallazgo = {"tipo": nombre, "valor": valor, "origen": origen, "peligro": peligro}
                 if confianza:
@@ -396,6 +498,12 @@ class MotorFiltro:
             print(f"   ⚠️ Error guardando caso puente: {e}")
 
     def guardar_hallazgo(self, hallazgo):
+        clave = (hallazgo['tipo'], hallazgo['valor'], hallazgo['origen'])
+        if clave in self._hallazgos_guardados:
+            self._hallazgos_guardados[clave] += 1
+            return
+        self._hallazgos_guardados[clave] = 1
+
         detalles = hallazgo.get('detalles', '')
         confianza = f" (Confianza: {hallazgo['confianza']})" if 'confianza' in hallazgo else ""
         linea = f"{hallazgo['peligro']} | [{hallazgo['tipo']}] {hallazgo['valor']} → {hallazgo['origen']}{confianza}"
