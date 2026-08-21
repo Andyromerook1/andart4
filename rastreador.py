@@ -58,7 +58,16 @@ class Rastreador:
         sys.exit(0)
 
     def es_mismo_dominio(self, base, url):
-        return True
+        try:
+            dominio_base = urlparse(base).netloc.lower()
+            if dominio_base.startswith("www."):
+                dominio_base = dominio_base[4:]
+            dominio_url = urlparse(url).netloc.lower()
+            if dominio_url.startswith("www."):
+                dominio_url = dominio_url[4:]
+            return dominio_base == dominio_url
+        except Exception:
+            return False
 
     # =============================================================
     # 🤖 ROBOTS.TXT
@@ -150,21 +159,73 @@ class Rastreador:
         except Exception:
             pass
 
-    def extraer_enlaces(self, url, html_o_texto):
-        enlaces = []
+    def _registrar_dependencia(self, url_origen, url_dependencia, tipo):
+        """
+        Un recurso cross-domain (script, iframe, imagen, o link a otro
+        sitio) NUNCA entra a la cola de rastreo — se registra como
+        dependencia del candidate. Ver la infraestructura que comparten
+        varios sitios de phishing (mismo CDN, mismo panel) es valioso,
+        pero seguir rastreándola como si fuera un nuevo objetivo es lo
+        que generaba la explosión de ruido original.
+        """
         try:
-            soup = BeautifulSoup(html_o_texto, "html.parser")
-            for a in soup.find_all("a", href=True):
-                absoluto = urljoin(url, a["href"])
-                if absoluto.startswith("http"):
-                    enlaces.append(absoluto.split("#")[0].rstrip("/"))
-            for script in soup.find_all("script", src=True):
-                absoluto_js = urljoin(url, script["src"])
-                if absoluto_js.startswith("http"):
-                    enlaces.append(absoluto_js)
+            candidate = self.candidate_store.get_or_create(url_origen, discovered_by="rastreador_web")
+            candidate.setdefault("dependencies", [])
+            dominio_dep = urlparse(url_dependencia).netloc.lower()
+            if dominio_dep.startswith("www."):
+                dominio_dep = dominio_dep[4:]
+            existente = next(
+                (d for d in candidate["dependencies"] if d["domain"] == dominio_dep and d["type"] == tipo),
+                None
+            )
+            if existente:
+                existente["count"] += 1
+            else:
+                candidate["dependencies"].append({
+                    "domain": dominio_dep, "type": tipo, "count": 1,
+                })
         except Exception:
             pass
-        return enlaces
+
+    def extraer_enlaces(self, url, html_o_texto):
+        """
+        Devuelve SOLO enlaces internos (mismo dominio) para seguir
+        rastreando. Todo lo cross-domain (scripts, iframes, imágenes,
+        links externos) se registra como dependencia del candidate,
+        pero NUNCA se agrega a la cola de rastreo.
+        """
+        enlaces_internos = []
+        try:
+            soup = BeautifulSoup(html_o_texto, "html.parser")
+
+            for a in soup.find_all("a", href=True):
+                absoluto = urljoin(url, a["href"])
+                if not absoluto.startswith("http"):
+                    continue
+                absoluto = absoluto.split("#")[0].rstrip("/")
+                if self.es_mismo_dominio(url, absoluto):
+                    enlaces_internos.append(absoluto)
+                else:
+                    self._registrar_dependencia(url, absoluto, "link_externo")
+
+            for script in soup.find_all("script", src=True):
+                absoluto_js = urljoin(url, script["src"])
+                if absoluto_js.startswith("http") and not self.es_mismo_dominio(url, absoluto_js):
+                    self._registrar_dependencia(url, absoluto_js, "script")
+
+            for iframe in soup.find_all("iframe", src=True):
+                absoluto_iframe = urljoin(url, iframe["src"])
+                if absoluto_iframe.startswith("http") and not self.es_mismo_dominio(url, absoluto_iframe):
+                    self._registrar_dependencia(url, absoluto_iframe, "iframe")
+
+            for img in soup.find_all("img", src=True):
+                absoluto_img = urljoin(url, img["src"])
+                if absoluto_img.startswith("http") and not self.es_mismo_dominio(url, absoluto_img):
+                    self._registrar_dependencia(url, absoluto_img, "imagen")
+
+        except Exception:
+            pass
+        return enlaces_internos
 
     def _extraer_texto_visible(self, html):
         """
@@ -293,7 +354,6 @@ class Rastreador:
                     for h in hallazgos:
                         self.filtro.guardar_hallazgo(h)
 
-                    # --- NUEVO: señales de contenido de fraude ---
                     texto_visible = self._extraer_texto_visible(resp.text)
                     self._procesar_contenido_fraude(url, texto_visible)
 
