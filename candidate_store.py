@@ -10,15 +10,20 @@ Los motores de score DECIDEN cómo interpretarlas. candidate_store nunca
 elige "la mejor fuente" ni ninguna otra lógica de scoring — eso sería
 meter conocimiento de riesgo dentro del almacenamiento.
 
-Dos dimensiones de riesgo, calculadas por separado (ver discusión de
-diseño): DOMAIN_RISK (infraestructura: edad, TLD, typosquatting, CT,
-fuente) y CONTENT_RISK (texto: reclutamiento, inversión fraudulenta,
-etc.). No se mezclan en un solo score — analysis_policy.py decide el
-nivel mirando ambos.
+Dos dimensiones de riesgo, calculadas por separado: DOMAIN_RISK
+(infraestructura: edad, TLD, typosquatting, CT, fuente) y CONTENT_RISK
+(texto: reclutamiento, inversión fraudulenta, etc.). No se mezclan en
+un solo score — analysis_policy.py decide el nivel mirando ambos.
 
 Un candidate se identifica por dominio normalizado, pero conserva
 hostnames y URLs originales (importante para correlación de
 infraestructura más adelante).
+
+source_roles: metadata de procedencia (qué role tenía la fuente que
+observó este candidate — "candidate", "reference", "threat_feed").
+NO afecta el score de ninguna manera — es solo trazabilidad, para poder
+responder después "¿esto fue observado directamente o solo mencionado
+por un tercero?" (base de la futura capa de evidencia).
 
 Persistencia: JSON simple en OUTPUT_BASE/candidatos.json.
 """
@@ -118,6 +123,7 @@ class CandidateStore:
         self,
         url_o_dominio: str,
         discovered_by: str = None,
+        role: str = None,
     ) -> dict:
         domain = normalizar_dominio(url_o_dominio)
         ahora = _ahora_iso()
@@ -131,6 +137,13 @@ class CandidateStore:
             "discovered_by": (
                 [discovered_by]
                 if discovered_by
+                else []
+            ),
+
+            # Metadata de procedencia — NO afecta score. Ver docstring.
+            "source_roles": (
+                [role]
+                if role
                 else []
             ),
 
@@ -176,6 +189,7 @@ class CandidateStore:
         self,
         url_o_dominio: str,
         discovered_by: str = None,
+        role: str = None,
     ) -> dict:
         domain = normalizar_dominio(url_o_dominio)
 
@@ -190,6 +204,7 @@ class CandidateStore:
             )
 
             existente.setdefault("discovered_by", [])
+            existente.setdefault("source_roles", [])
 
             if (
                 discovered_by
@@ -198,6 +213,12 @@ class CandidateStore:
                 existente["discovered_by"].append(
                     discovered_by
                 )
+
+            if (
+                role
+                and role not in existente["source_roles"]
+            ):
+                existente["source_roles"].append(role)
 
             # Compatibilidad con candidatos guardados por versiones
             # anteriores del store.
@@ -217,6 +238,7 @@ class CandidateStore:
         return self.create(
             url_o_dominio,
             discovered_by,
+            role,
         )
 
     @staticmethod
@@ -343,6 +365,11 @@ class CandidateStore:
         de deduplicación por tipo que add_signal() (first_seen,
         last_seen, count). No calcula CONTENT_RISK acá — eso lo hace
         recalculate() llamando a content_risk_score.py.
+
+        IMPORTANTE: quien llama a este método decide si corresponde
+        llamarlo — rastreador.py NO lo invoca cuando el origen es una
+        fuente de rol "reference" (ver _procesar_contenido_fraude en
+        rastreador.py). Este método en sí no conoce roles.
         """
 
         candidate = self._data.get(
