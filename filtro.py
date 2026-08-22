@@ -21,10 +21,6 @@ TIPOS_WALLET = (
 TIPOS_BASE58CHECK = ("Bitcoin (Legacy)", "Litecoin (Legacy)", "Dogecoin", "Dash", "Tron (TRX)")
 TIPOS_REGEX_DEBIL = ("Solana (SOL)", "Polkadot (DOT)", "Cosmos (ATOM)", "Ripple (XRP)")
 
-# Tipos que son ENTIDADES (Andart encontró algo), no señales de riesgo
-# por sí solas. Un email, un usuario de Telegram o un número de WhatsApp
-# son formas normales de contacto — solo se vuelven relevantes según el
-# CONTEXTO (ver distinción operativo/descriptivo más abajo).
 TIPOS_ENTIDAD_NEUTRA = ("Correo Electrónico", "Usuario Telegram (link)",
                          "Usuario Telegram (mención)", "Número WhatsApp (con código país)")
 
@@ -43,29 +39,11 @@ CONTEXTO_CUENTA_FINANCIERA = [
     "银行", "账户", "转账",
 ]
 
-# Contexto específico de PIX (no tiene checksum público verificable como
-# CBU/IBAN, así que la única forma de bajar el ruido de UUIDs random es
-# EXIGIR contexto — no basta con que el formato matchee).
 CONTEXTO_PIX = [
     "pix", "chave", "chave pix", "pagamento", "transferência",
     "banco", "conta", "depósito", "enviar dinheiro",
 ]
 
-# =============================================================
-# CONTEXTO OPERATIVO vs. DESCRIPTIVO
-#
-# La misma palabra ("estafa", "pago", "Telegram") aparece tanto en:
-#   - un sitio operando la estafa ("Escribinos por Telegram para
-#     invertir", imperativo/2da persona, instruyendo a ACTUAR ahora)
-#   - un artículo que la describe ("Reportamos esta estafa",
-#     "Las víctimas contactaron a @fulano", 3ra persona/pasado,
-#     narrando lo que YA pasó)
-#
-# Antes usábamos una sola lista de palabras ("estafa", "pago", etc.)
-# que subía la confianza en AMBOS casos por igual — eso es lo que
-# convertía un artículo de ScamWarners hablando DE una estafa en un
-# hallazgo 🔴 contra ScamWarners mismo.
-# =============================================================
 PATRONES_CONTEXTO_OPERATIVO = [
     r'\b(escrib[íi]nos|contact[áa]nos|escrib[íi]me|contact[áa]me)\b',
     r'\b(envi[áa]|deposit[áa]|transfer[íi])\w*\s+(a|al|a este)\b',
@@ -214,7 +192,7 @@ class MotorFiltro:
             return self.validar_iban(valor)
         if "SWIFT" in nombre:
             return self.validar_swift(valor)
-        return True  # PIX/CLABE se validan por contexto más abajo, no acá
+        return True
 
     def _confianza_por_contexto(self, texto, pos_inicio, pos_fin, palabras_clave):
         inicio = max(0, pos_inicio - 60)
@@ -223,12 +201,6 @@ class MotorFiltro:
         return "🟢 ALTA" if any(kw in ventana for kw in palabras_clave) else "🟡 MEDIA"
 
     def _clasificar_contexto(self, texto, pos_inicio, pos_fin):
-        """
-        Devuelve 'operativo', 'descriptivo', o 'neutro' según el
-        lenguaje alrededor del match. Operativo = instruye a actuar
-        AHORA (típico de un sitio que opera la estafa). Descriptivo =
-        narra algo que YA pasó (típico de un artículo que la reporta).
-        """
         inicio = max(0, pos_inicio - 150)
         fin = min(len(texto), pos_fin + 150)
         ventana = texto[inicio:fin]
@@ -362,9 +334,6 @@ class MotorFiltro:
                 if es_cuenta_financiera and not self._es_cuenta_financiera_valida(nombre, valor):
                     continue
 
-                # PIX: sin checksum público verificable, se EXIGE contexto
-                # — un UUID solo, sin nada de "pix/chave/pagamento" cerca,
-                # se descarta directo (no se guarda ni como MEDIO).
                 if "PIX" in nombre:
                     confianza_pix = self._confianza_por_contexto(texto, match.start(), match.end(), CONTEXTO_PIX)
                     if confianza_pix != "🟢 ALTA":
@@ -396,10 +365,6 @@ class MotorFiltro:
                         peligro = "🟡 MEDIO"
 
                 if es_entidad_neutra:
-                    # Ya no basta con "hay una palabra de riesgo cerca" —
-                    # distinguimos si el texto INSTRUYE a actuar ahora
-                    # (operativo → 🔴) o solo NARRA algo que ya pasó
-                    # (descriptivo → informativo, no acusación).
                     tipo_contexto = self._clasificar_contexto(texto, match.start(), match.end())
                     if tipo_contexto in ("operativo", "mixto"):
                         peligro = "🔴 ALTO"
@@ -450,7 +415,12 @@ class MotorFiltro:
                 for endpoint in resultados_js.get('endpoints', []):
                     if not endpoint or "archive.org" in endpoint.lower():
                         continue
-                    h = {"tipo": "Endpoint API (JS)", "valor": endpoint, "origen": origen, "peligro": "🟡 MEDIO"}
+                    # Un endpoint técnico (login, register, admin-ajax.php,
+                    # xmlrpc.php...) es infraestructura NORMAL en millones
+                    # de sitios legítimos. Encontrarlo es informativo, no
+                    # una señal de riesgo por sí solo — igual que ya
+                    # hicimos con email/Telegram/WhatsApp.
+                    h = {"tipo": "Endpoint API (JS)", "valor": endpoint, "origen": origen, "peligro": "ℹ️ ENDPOINT"}
                     hallazgos.append(h)
                     self.guardar_hallazgo(h)
 
