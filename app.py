@@ -1,7 +1,7 @@
 # app.py
 import os
 import threading
-from fuentes import FuentesSemillas
+from fuentes import FuentesSemillas, ROL_CANDIDATO
 from rastreador import Rastreador
 from filtro import MotorFiltro
 from github_hunter import campaña_completa
@@ -91,7 +91,11 @@ if __name__ == "__main__":
             if dominios:
                 confirmar = input("¿Rastrear estos dominios ahora para buscar wallets/CBU/phishing? (s/n): ").strip().lower()
                 if confirmar == "s":
-                    semillas_nuevas = [f"https://{d['dominio']}" for d in dominios]
+                    # Un dominio salido de CT (typosquatting + certificado
+                    # nuevo) es observación directa a evaluar, no referencia.
+                    semillas_nuevas = [
+                        (f"https://{d['dominio']}", ROL_CANDIDATO) for d in dominios
+                    ]
                     bot = Rastreador(semilla=semillas_nuevas, limite=len(semillas_nuevas) * 5)
                     bot.iniciar()
 
